@@ -67,11 +67,6 @@ extern t5 :qword
 extern t6 :qword
 extern t7 :qword
 
-extern d0 :qword
-extern d1 :qword
-extern d2 :qword
-extern d3 :qword
-
 extern n0 :qword 
 extern n1 :qword 
 extern n2 :qword 
