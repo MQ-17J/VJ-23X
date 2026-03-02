@@ -57,62 +57,42 @@
 #ifdef __cplusplus
 namespace mq17j
 {
-	extern "C" {
+    extern "C" {
 #endif
 
-		typedef struct _scalars {
-			double e0, e1, e2, e3, e4, e5, e6, e7;
-			_scalars(double e0, double e1, double e2, double e3, double e4, double e5, double e6, double e7) {
-				this->e0 = e0;
-				this->e1 = e1;
-				this->e2 = e2;
-				this->e3 = e3;
-				this->e4 = e4;
-				this->e5 = e5;
-				this->e6 = e6;
-				this->e7 = e7;
-			}
-		} scalars;
+        __declspec(align(64)) typedef struct _oscalars32 {
+            float e0, e1, e2, e3, e4, e5, e6, e7;
+        } oscalars32;
 
-		__declspec(align(64)) typedef union _octonion {
-			__m512d avx512;
-			__m256d avx256[2];
-			scalars vals;
+        __declspec(align(64)) typedef struct _oscalars64 {
+            double e0, e1, e2, e3, e4, e5, e6, e7;
+        } oscalars64;
 
-			_octonion(double e0, double e1, double e2, double e3, double e4, double e5, double e6, double e7) {
-				this->vals.e0 = e0;
-				this->vals.e1 = e1;
-				this->vals.e2 = e2;
-				this->vals.e3 = e3;
-				this->vals.e4 = e4;
-				this->vals.e5 = e5;
-				this->vals.e6 = e6;
-				this->vals.e7 = e7;
-			}
+        __declspec(align(64)) typedef union _octonion32 {
+            __m512 avx512;
+            __m256 avx256[2];
+            oscalars32 vals;
+        } octonion32;
 
-			_octonion(__m256d q1, __m256d q2) {
-				avx256[0] = q1;
-				avx256[1] = q2;
-			}
-			_octonion(_octonion& o) {
-				this->vals = o.vals;
-			}
-			_octonion(__m512d m512) : avx512(m512) {}
-		} octonion;
+        __declspec(align(64)) typedef union _octonion64 {
+            __m512d avx512;
+            __m256d avx256[2];
+            oscalars64 vals;
+        } octonion64;
 
-		void octonion_mul64_AVX2(octonion* o1, octonion* o2, octonion* result);
-		void octonion_div64_AVX2(octonion* o1, octonion* o2, octonion* result);
-		void octonion_add64_AVX2(octonion* o1, octonion* o2, octonion* result);
-		void octonion_sub64_AVX2(octonion* o1, octonion* o2, octonion* result);
-		void octonion_norm64_AVX2(octonion* o1, double* result);
+        void octonion_mul64_AVX2(octonion64 *o1, octonion64 *o2, octonion64 *result);
+        void octonion_div64_AVX2(octonion64 *o1, octonion64 *o2, octonion64 *result);
+        void octonion_add64_AVX2(octonion64 *o1, octonion64 *o2, octonion64 *result);
+        void octonion_sub64_AVX2(octonion64 *o1, octonion64 *o2, octonion64 *result);
+        void octonion_norm64_AVX2(octonion64 *o1, double *result);
 
-		void octonion_mul64_AVX512(octonion* o1, octonion* o2, octonion* result);
-		void octonion_div64_AVX512(octonion* o1, octonion* o2, octonion* result);
-		void octonion_add64_AVX512(octonion* o1, octonion* o2, octonion* result);
-		void octonion_sub64_AVX512(octonion* o1, octonion* o2, octonion* result);
-		void octonion_norm64_AVX512(octonion* o1, double* result);
+        void octonion_mul64_AVX512(octonion64 *o1, octonion64 *o2, octonion64 *result);
+        void octonion_div64_AVX512(octonion64 *o1, octonion64 *o2, octonion64 *result);
+        void octonion_add64_AVX512(octonion64 *o1, octonion64 *o2, octonion64 *result);
+        void octonion_sub64_AVX512(octonion64 *o1, octonion64 *o2, octonion64 *result);
+        void octonion_norm64_AVX512(octonion64 *o1, double *result);
 
 #ifdef __cplusplus
-	}
+    }
 }
 #endif
