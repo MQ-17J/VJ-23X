@@ -72,11 +72,6 @@ public t5
 public t6
 public t7
 
-public d0
-public d1
-public d2
-public d3
-
 public n0
 public n1
 public n2
@@ -135,12 +130,6 @@ t4 real8 +1.0, -1.0, -1.0, -1.0, +1.0, +1.0, +1.0, +1.0
 t5 real8 +1.0, +1.0, -1.0, +1.0, -1.0, +1.0, -1.0, +1.0
 t6 real8 +1.0, +1.0, +1.0, -1.0, -1.0, +1.0, +1.0, -1.0
 t7 real8 +1.0, -1.0, +1.0, +1.0, -1.0, -1.0, +1.0, +1.0
-
-; d0 is used for division
-d0 real8 +1.0, -1.0, -1.0, -1.0
-d1 real8 +1.0, +1.0, +1.0, -1.0
-d2 real8 +1.0, -1.0, +1.0, +1.0
-d3 real8 +1.0, +1.0, -1.0, +1.0
 
 ; octonion 1 perm map for AVX512 (used with AVX-512 version of vfmadd231pd)
 n0 dq 0, 0, 0, 0, 0, 0, 0, 0
