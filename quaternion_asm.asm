@@ -122,16 +122,13 @@ include asm_data.inc
 .code
 
 ; =================================================================================================================
-; quaternion double precision addition AVX2
+; quaternion double precision norm AVX2
 ; =================================================================================================================
 ; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ;
 ; The math:
 ;
-; q1e0+q2e0 -> q3e0
-; q1e1+q2e1 -> q3e1
-; q1e2+q2e2 -> q3e2
-; q1e3+q2e3 -> q3e3
+; result = e0*e0 + e1*e1 + e2*e2 + e3*e3
 ;
 ; -----------------------------------------------------------------------------------------------------------------
 ;
@@ -141,126 +138,22 @@ include asm_data.inc
 ;
 ; C prototype:
 ;
-; void quaternion_add64_AVX2(quaternion64 *o1, quaternion64 *o2, quaternion64 *result);
+; void quaternion_norm64_AVX2(quaternion64 *q1, double *result);
 ;
 ; -----------------------------------------------------------------------------------------------------------------
 ;
-
-public quaternion_add64_AVX2
-quaternion_add64_AVX2 proc
-    vmovapd     ymm0, ymmword ptr [rcx]                   ; get q1
-    vaddpd      ymm0, ymm0, ymmword ptr [rdx]             ; add q2 to q1
-    vmovapd     ymmword ptr [r8], ymm0                    ; store result
+public quaternion_norm64_AVX2
+quaternion_norm64_AVX2 proc
+    vmovapd      ymm0, ymmword ptr [rcx]                   ; ymm0 = o1e0, o1e1, o1e2, o1e3
+    vmulpd       ymm0, ymm0, ymm0                          ; ymm0 = o1e0*o1e0, o1e1*o1e1, o1e2*o1e2, o1e3*o1e3
+    vextractf128 xmm3, ymm0, 1                             ; xmm3 = o1e2*o1e2, o1e3*o1e3
+    vaddpd       xmm3, xmm3, xmm0                          ; xmm3 = o1e2*o1e2+o1e0*o1e0, o1e3*o1e3+o1e1*o1e1
+    vmovapd      xmm4, xmm3                                ; xmm4 = o1e2*o1e2+o1e0*o1e0, o1e3*o1e3+o1e1*o1e1
+    vshufpd      xmm4, xmm4, xmm3, 1                       ; xmm4 = o1e3*o1e3+o1e1*o1e1, o1e2*o1e2+o1e0*o1e0
+    vaddpd       xmm0, xmm4, xmm3                          ; xmm0 = o1e3*o1e3+o1e1*o1e1+o1e2*o1e2+o1e0*o1e0, o1e2*o1e2+o1e0*o1e0+o1e3*o1e3+o1e1*o1e1
+    movsd        qword ptr [rdx], xmm0
     ret
-quaternion_add64_AVX2 endp
-; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-; =================================================================================================================
-
-
-; =================================================================================================================
-; quaternion double precision subtraction AVX2
-; =================================================================================================================
-; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-;
-; The math:
-;
-; q1e0-q2e0 -> q3e0
-; q1e1-q2e1 -> q3e1
-; q1e2-q2e2 -> q3e2
-; q1e3-q2e3 -> q3e3
-;
-; -----------------------------------------------------------------------------------------------------------------
-;
-; notes:
-;
-; -----------------------------------------------------------------------------------------------------------------
-;
-; C prototype:
-;
-; void quaternion_sub64_AVX2(quaternion64 *o1, quaternion64 *o2, quaternion64 *result);
-;
-; -----------------------------------------------------------------------------------------------------------------
-;
-public quaternion_sub64_AVX2
-; void quaternion_sub256(quaternion *q1, quaternion *q2, quaternion *result);
-quaternion_sub64_AVX2 proc
-    vmovapd     ymm0, ymmword ptr [rcx]                   ; get q1
-    vsubpd      ymm0, ymm0, ymmword ptr [rdx]             ; subtract q2 from q1
-    vmovapd     ymmword ptr [r8], ymm0                    ; store result
-    ret
-quaternion_sub64_AVX2 endp
-; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-; =================================================================================================================
-
-
-; =================================================================================================================
-; quaternion double precision scalar multiplication AVX2
-; =================================================================================================================
-; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-;
-; The math:
-;
-; q1e0*s -> e0
-; q1e1*s -> e1
-; q1e2*s -> e2
-; q1e3*s -> e3
-;
-; -----------------------------------------------------------------------------------------------------------------
-;
-; notes:
-;
-; -----------------------------------------------------------------------------------------------------------------
-;
-; C prototype:
-;
-; void quaternion_mul32s_AVX2(quaternion64 *o1, double *s, quaternion64 *result);
-;
-; -----------------------------------------------------------------------------------------------------------------
-;
-public quaternion_mul32s_AVX2
-quaternion_mul32s_AVX2 proc
-    vmovapd     ymm0, ymmword ptr [rcx]
-    vbroadcastsd ymm1, qword ptr [rdx]
-    vmulpd      ymm0, ymm0, ymm1
-    vmovapd     ymmword ptr [r8], ymm0
-    ret
-quaternion_mul32s_AVX2 endp
-; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-; =================================================================================================================
-
-
-; =================================================================================================================
-; quaternion double precision scalar division AVX2
-; =================================================================================================================
-; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-;
-; The math:
-;
-; q1e0/s -> e0
-; q1e1/s -> e1
-; q1e2/s -> e2
-; q1e3/s -> e3
-;
-; -----------------------------------------------------------------------------------------------------------------
-;
-; notes:
-;
-; -----------------------------------------------------------------------------------------------------------------
-;
-; C prototype:
-;
-; void quaternion_div32s_AVX2(quaternion64 *o1, double *s, quaternion64 *result);
-;
-; -----------------------------------------------------------------------------------------------------------------
-;
-public quaternion_div32s_AVX2
-quaternion_div32s_AVX2 proc
-    vmovapd     ymm0, ymmword ptr [rcx]
-    vbroadcastsd ymm1, qword ptr [rdx]
-    vdivpd      ymm0, ymm0, ymm1
-    vmovapd     ymmword ptr [r8], ymm0
-    ret
-quaternion_div32s_AVX2 endp
+quaternion_norm64_AVX2 endp
 ; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 ; =================================================================================================================
 
@@ -291,30 +184,30 @@ quaternion_div32s_AVX2 endp
 ;
 public quaternion_mul64_AVX2
 quaternion_mul64_AVX2 proc
-    lea         rax, [h0]                                 ; load address of mult mask
-    vmovapd     ymm0, ymmword ptr [rcx]
-    vmovapd     ymm1, ymmword ptr [rdx]
+    lea          rax, [h0]                                 ; load address of mult mask
+    vmovapd      ymm0, ymmword ptr [rcx]
+    vmovapd      ymm1, ymmword ptr [rdx]
     ; e0
-    vpermpd     ymm2, ymm0, 00000000b
-    vpermpd     ymm3, ymm1, 11100100b
-    vmulpd      ymm4, ymm2, ymm3
-    ;vfmadd231pd ymm4, ymm2, ymmword ptr [rax]
+    vpermpd      ymm2, ymm0, 00000000b
+    vpermpd      ymm3, ymm1, 11100100b
+    vmulpd       ymm4, ymm2, ymm3
+    ;vfmadd231pd ymm4, ymm2, ymmword ptr [rax]             ; (commented out for optimize)
     ; e1
-    vpermpd     ymm2, ymm0, 01010101b
-    vpermpd     ymm3, ymm1, 10110001b
-    vmulpd      ymm2, ymm2, ymm3
-    vfmadd231pd ymm4, ymm2, ymmword ptr [rax+64]
+    vpermpd      ymm2, ymm0, 01010101b
+    vpermpd      ymm3, ymm1, 10110001b
+    vmulpd       ymm2, ymm2, ymm3
+    vfmadd231pd  ymm4, ymm2, ymmword ptr [rax+64]
     ; e2
-    vpermpd     ymm2, ymm0, 10101010b
-    vpermpd     ymm3, ymm1, 01001110b
-    vmulpd      ymm2, ymm2, ymm3
-    vfmadd231pd ymm4, ymm2, ymmword ptr [rax+128]
+    vpermpd      ymm2, ymm0, 10101010b
+    vpermpd      ymm3, ymm1, 01001110b
+    vmulpd       ymm2, ymm2, ymm3
+    vfmadd231pd  ymm4, ymm2, ymmword ptr [rax+128]
     ; e3
-    vpermpd     ymm2, ymm0, 11111111b
-    vpermpd     ymm3, ymm1, 00011011b
-    vmulpd      ymm2, ymm2, ymm3
-    vfmadd231pd ymm4, ymm2, ymmword ptr [rax+192]
-    vmovapd     ymmword ptr [r8], ymm4
+    vpermpd      ymm2, ymm0, 11111111b
+    vpermpd      ymm3, ymm1, 00011011b
+    vmulpd       ymm2, ymm2, ymm3
+    vfmadd231pd  ymm4, ymm2, ymmword ptr [rax+192]
+    vmovapd      ymmword ptr [r8], ymm4
     ret
 quaternion_mul64_AVX2 endp
 ; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -351,45 +244,50 @@ quaternion_div64_AVX2 proc
     vxorpd      ymm4, ymm4, ymm4                        ; ymm4 = 0
     vmovapd     ymm0, ymmword ptr [rcx]                 ; ymm0 = q1
     vmovapd     ymm1, ymmword ptr [rdx]                 ; ymm1 = q2
-    vmulpd      ymm5, ymm1, ymm1                        ; ymm5 = q2r*q2r, q2i*q2i, q2j*q2j, q2k*q2k
     ; r
-    vpermpd     ymm2, ymm0, 00000000b
-    vpermpd     ymm3, ymm1, 11100100b
-    vmulpd      ymm2, ymm2, ymm3
-    vfmadd231pd ymm4, ymm2, ymmword ptr [rax]
+    vpermpd     ymm2, ymm0, 00000000b                   ; ymm2 = q1e0, q1e0, q1e0, q1e0
+    vpermpd     ymm3, ymm1, 11100100b                   ; ymm3 = q2e3, q2e2, q2e1, q2e0
+    vmulpd      ymm2, ymm2, ymm3                        ; ymm2 = q1e0*q2e3, q1e0*q2e2, q1e0*q2e1, q1e0*q2e0
+    vfmadd231pd ymm4, ymm2, ymmword ptr [rax]           ; ymm4 = ymm4 + (q1e0*q2e3*t0[3], q1e0*q2e2*t0[2], q1e0*q2e1*t0[1], q1e0*q2e0*t0[0])
     ; i
-    vpermpd     ymm2, ymm0, 01010101b
-    vpermpd     ymm3, ymm1, 10110001b
-    vmulpd      ymm2, ymm2, ymm3
-    vfmadd231pd ymm4, ymm2, ymmword ptr [rax+64]
+    vpermpd     ymm2, ymm0, 01010101b                   ; ymm2 = q1e1, q1e1, q1e1, q1e1
+    vpermpd     ymm3, ymm1, 10110001b                   ; ymm3 = q2e2, q2e3, q2e0, q2e1
+    vmulpd      ymm2, ymm2, ymm3                        ; ymm2 = q1e1*q2e2, q1e1*q2e3, q1e1*q2e0, q1e1*q2e1
+    vfmadd231pd ymm4, ymm2, ymmword ptr [rax+64]        ; ymm4 = ymm4 + (q1e1*q2e2*t0[3], q1e1*q2e3*t0[2], q1e1*q2e0*t0[1], q1e1*q2e1*t0[0])
     ; j
-    vpermpd     ymm2, ymm0, 10101010b
-    vpermpd     ymm3, ymm1, 01001110b
-    vmulpd      ymm2, ymm2, ymm3
-    vfmadd231pd ymm4, ymm2, ymmword ptr [rax+128]
+    vpermpd     ymm2, ymm0, 10101010b                   ; ymm2 = q1e2, q1e2, q1e2, q1e2
+    vpermpd     ymm3, ymm1, 01001110b                   ; ymm3 = q2e1, q2e0, q2e3, q2e2
+    vmulpd      ymm2, ymm2, ymm3                        ; ymm2 = q1e2*q2e1, q1e2*q2e0, q1e2*q2e3, q1e2*q2e2
+    vfmadd231pd ymm4, ymm2, ymmword ptr [rax+128]       ; ymm4 = ymm4 + (q1e2*q2e1*t0[3], q1e2*q2e0*t0[2], q1e2*q2e3*t0[1], q1e2*q2e2*t0[0])
     ; k
-    vpermpd     ymm2, ymm0, 11111111b
-    vpermpd     ymm3, ymm1, 00011011b
-    vmulpd      ymm2, ymm2, ymm3
-    vfmadd231pd ymm4, ymm2, ymmword ptr [rax+192]
-    ;
-    vhaddpd     ymm5, ymm5, ymm5                        ; ymm5 = q2r*q2r+q2i*q2i, q2r*q2r+q2i*q2i, q2j*q2j+q2k*q2k, q2j*q2j+q2k*q2k
-    vpermpd     ymm3, ymm5, 00011011b                   ; ymm3 = q2j*q2j+q2k*q2k, q2j*q2j+q2k*q2k, q2r*q2r+q2i*q2i, q2r*q2r+q2i*q2i
-    vaddpd      ymm5, ymm5, ymm3                        ; ymm5 = q2r*q2r+q2i*q2i+q2j*q2j+q2k*q2k 4 times
-    vdivpd      ymm4, ymm4, ymm5                        ; ymm4 = algo results
+    vpermpd     ymm2, ymm0, 11111111b                   ; ymm2 = q1e3, q1e3, q1e3, q1e3
+    vpermpd     ymm3, ymm1, 00011011b                   ; ymm3 = q2e0, q2e1, q2e2, q2e3
+    vmulpd      ymm2, ymm2, ymm3                        ; ymm2 = q1e3*q2e0, q1e3*q2e1, q1e3*q2e2, q1e3*q2e3
+    vfmadd231pd ymm4, ymm2, ymmword ptr [rax+192]       ; ymm4 = ymm4 + (q1e3*q2e0*t0[3], q1e3*q2e1*t0[2], q1e3*q2e2*t0[1], q1e3*q2e3*t0[0])
+    ; div by q2 norm
+    vmulpd      ymm5, ymm1, ymm1                        ; ymm5 = q2e0*q2e0, q2e1*q2e1, q2e2*q2e2, q2e3*q2e3
+    vhaddpd     ymm5, ymm5, ymm5                        ; ymm5 = q2e0*q2e0+q2e1*q2e1, q2e0*q2e0+q2e1*q2e1, q2e2*q2e2+q2e3*q2e3, q2e2*q2e2+q2e3*q2e3
+    vpermpd     ymm3, ymm5, 00011011b                   ; ymm3 = q2e2*q2e2+q2e3*q2e3, q2e2*q2e2+q2e3*q2e3, q2e0*q2e0+q2e1*q2e1, q2e0*q2e0+q2e1*q2e1
+    vaddpd      ymm5, ymm5, ymm3                        ; ymm5 = q2e0*q2e0+q2e1*q2e1+q2e2*q2e2+q2e3*q2e3 (4 times)
+    vdivpd      ymm4, ymm4, ymm5                        ; ymm4 = ymm4/q2norm
     vmovapd     ymmword ptr [r8], ymm4
     ret
 quaternion_div64_AVX2 endp
+; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+; =================================================================================================================
 
 
 ; =================================================================================================================
-; quaternion double precision norm AVX2
+; quaternion double precision scalar multiplication AVX2
 ; =================================================================================================================
 ; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ;
 ; The math:
 ;
-; result = e0*e0 + e1*e1 + e2*e2 + e3*e3
+; q1e0*s -> e0
+; q1e1*s -> e1
+; q1e2*s -> e2
+; q1e3*s -> e3
 ;
 ; -----------------------------------------------------------------------------------------------------------------
 ;
@@ -399,22 +297,125 @@ quaternion_div64_AVX2 endp
 ;
 ; C prototype:
 ;
-; void quaternion_norm64_AVX2(quaternion64 *o1, double *result);
+; void quaternion_mul64s_AVX2(quaternion64 *q1, double *s, quaternion64 *result);
 ;
 ; -----------------------------------------------------------------------------------------------------------------
 ;
-; TODO - rework this to ditch the slow vhaddpd
-;
-public quaternion_norm64_AVX2
-quaternion_norm64_AVX2 proc
-    vmovapd     ymm0, ymmword ptr [rcx]
-    vmulpd      ymm0, ymm0, ymm0                        ; ymm0 = qr*qr, qi*qi, qj*qj, qk*qk
-    vhaddpd     ymm0, ymm0, ymm0                        ; ymm0 = qr*qr+qi*qi, qr*qr+qi*qi, qj*qj+qk*qk, qj*qj+qk*qk
-    vpermpd     ymm1, ymm0, 00011011b                   ; ymm1 = qj*qj+qk*qk, qj*qj+qk*qk, qr*qr+qi*qi, qr*qr+qi*qi
-    vaddpd      ymm0, ymm1, ymm0                        ; ymm0 = qr*qr+qi*qi+qj*qj+qk*qk in each cell
-    movsd       mmword ptr [rdx], xmm0
+public quaternion_mul64s_AVX2
+quaternion_mul64s_AVX2 proc
+    vmovapd      ymm0, ymmword ptr [rcx]
+    vbroadcastsd ymm1, qword ptr [rdx]
+    vmulpd       ymm0, ymm0, ymm1
+    vmovapd      ymmword ptr [r8], ymm0
     ret
-quaternion_norm64_AVX2 endp
+quaternion_mul64s_AVX2 endp
+; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+; =================================================================================================================
+
+
+; =================================================================================================================
+; quaternion double precision scalar division AVX2
+; =================================================================================================================
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;
+; The math:
+;
+; q1e0/s -> e0
+; q1e1/s -> e1
+; q1e2/s -> e2
+; q1e3/s -> e3
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+; notes:
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+; C prototype:
+;
+; void quaternion_div64s_AVX2(quaternion64 *q1, double *s, quaternion64 *result);
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+public quaternion_div64s_AVX2
+quaternion_div64s_AVX2 proc
+    vmovapd     ymm0, ymmword ptr [rcx]
+    vbroadcastsd ymm1, qword ptr [rdx]
+    vdivpd      ymm0, ymm0, ymm1
+    vmovapd     ymmword ptr [r8], ymm0
+    ret
+quaternion_div64s_AVX2 endp
+; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+; =================================================================================================================
+
+
+; =================================================================================================================
+; quaternion double precision addition AVX2
+; =================================================================================================================
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;
+; The math:
+;
+; q1e0+q2e0 -> q3e0
+; q1e1+q2e1 -> q3e1
+; q1e2+q2e2 -> q3e2
+; q1e3+q2e3 -> q3e3
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+; notes:
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+; C prototype:
+;
+; void quaternion_add64_AVX2(quaternion64 *q1, quaternion64 *q2, quaternion64 *result);
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+public quaternion_add64_AVX2
+quaternion_add64_AVX2 proc
+    vmovapd     ymm0, ymmword ptr [rcx]                   ; get q1
+    vaddpd      ymm0, ymm0, ymmword ptr [rdx]             ; add q2 to q1
+    vmovapd     ymmword ptr [r8], ymm0                    ; store result
+    ret
+quaternion_add64_AVX2 endp
+; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+; =================================================================================================================
+
+
+; =================================================================================================================
+; quaternion double precision subtraction AVX2
+; =================================================================================================================
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;
+; The math:
+;
+; q1e0-q2e0 -> q3e0
+; q1e1-q2e1 -> q3e1
+; q1e2-q2e2 -> q3e2
+; q1e3-q2e3 -> q3e3
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+; notes:
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+; C prototype:
+;
+; void quaternion_sub64_AVX2(quaternion64 *q1, quaternion64 *q2, quaternion64 *result);
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+public quaternion_sub64_AVX2
+; void quaternion_sub256(quaternion *q1, quaternion *q2, quaternion *result);
+quaternion_sub64_AVX2 proc
+    vmovapd     ymm0, ymmword ptr [rcx]                   ; get q1
+    vsubpd      ymm0, ymm0, ymmword ptr [rdx]             ; subtract q2 from q1
+    vmovapd     ymmword ptr [r8], ymm0                    ; store result
+    ret
+quaternion_sub64_AVX2 endp
 ; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 ; =================================================================================================================
 

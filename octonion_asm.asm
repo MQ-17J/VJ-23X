@@ -185,6 +185,54 @@ include asm_data.inc
 .code
 
 ; =================================================================================================================
+; =================================================================================================================
+; AVX2
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+; =================================================================================================================
+; octonion double precision normal AVX2
+; =================================================================================================================
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;
+; The math
+;   result = e0*e0 + e1*e1 + e2*e2 + e3*e3 + e4*e4 + e5*e5 + e6*e6 + e7*e7
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+; notes:
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+; C prototype:
+;
+; void octonion_norm64_AVX2(octonion64 *o1, double *result);
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+public octonion_norm64_AVX2
+octonion_norm64_AVX2 proc
+    vmovapd      ymm0, ymmword ptr [rcx]                   ; ymm0 = o1e0, o1e1, o1e2, o1e3
+    vmovapd      ymm1, ymmword ptr [rcx+32]                ; ymm1 = o1e4, o1e5, o1e6, o1e7
+    vmulpd       ymm0, ymm0, ymm0                          ; ymm0 = o1e0*o1e0, o1e1*o1e1, o1e2*o1e2, o1e3*o1e3
+    vmulpd       ymm1, ymm1, ymm1                          ; ymm1 = o1e4*o1e4, o1e5*o1e5, o1e6*o1e6, o1e7*o1e7
+    vextractf128 xmm3, ymm0, 1                             ; xmm3 = o1e2*o1e2, o1e3*o1e3
+    vaddpd       xmm3, xmm3, xmm0                          ; xmm3 = o1e2*o1e2+o1e0*o1e0, o1e3*o1e3+o1e1*o1e1
+    vmovapd      xmm4, xmm3                                ; xmm4 = o1e2*o1e2+o1e0*o1e0, o1e3*o1e3+o1e1*o1e1
+    vshufpd      xmm4, xmm4, xmm3, 1                       ; xmm4 = o1e3*o1e3+o1e1*o1e1, o1e2*o1e2+o1e0*o1e0
+    vaddpd       xmm0, xmm4, xmm3                          ; xmm0 = o1e3*o1e3+o1e1*o1e1+o1e2*o1e2+o1e0*o1e0, o1e2*o1e2+o1e0*o1e0+o1e3*o1e3+o1e1*o1e1
+    vextractf128 xmm3, ymm1, 1                             ; xmm3 = o1e6*o1e6, o1e7*o1e7
+    vaddpd       xmm3, xmm3, xmm1                          ; xmm3 = o1e6*o1e6+o1e4*o1e4, o1e7*o1e7+o1e5*o1e5
+    vshufpd      xmm4, xmm3, xmm3,1                        ; xmm4 = o1e7*o1e7+o1e5*o1e5, o1e6*o1e6+o1e4*o1e4
+    vaddpd       xmm4, xmm4, xmm3                          ; xmm4 = o1e7*o1e7+o1e5*o1e5+o1e6*o1e6+o1e4*o1e4, o1e6*o1e6+o1e4*o1e4+o1e7*o1e7+o1e5*o1e5
+    vaddpd       xmm0, xmm0, xmm4                          ; xmm0 = o1e3*o1e3+o1e1*o1e1+o1e2*o1e2+o1e0*o1e0+o1e7*o1e7+o1e5*o1e5+o1e6*o1e6+o1e4*o1e4, o1e2*o1e2+o1e0*o1e0+o1e3*o1e3+o1e1*o1e1+o1e6*o1e6+o1e4*o1e4+o1e7*o1e7+o1e5*o1e5
+    vmovq        qword ptr [rdx], xmm0                     ; result = xmm0
+    ret
+octonion_norm64_AVX2 endp
+; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+; =================================================================================================================
+
+; =================================================================================================================
 ; octonion double precision multiplication AVX2
 ; =================================================================================================================
 ; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -215,153 +263,97 @@ include asm_data.inc
 ;
 public octonion_mul64_AVX2
 octonion_mul64_AVX2 proc
-;
-; TODO - switch to stack for multi-threading instead of using single locations for temps
-;
-    vmovapd     xmmword ptr [temp_xmm6], xmm6             ; windows ABI expects ymm6-ymm15 non-volatile
-    vmovapd     xmmword ptr [temp_xmm7], xmm7
-    vmovapd     xmmword ptr [temp_xmm8], xmm8
-    vmovapd     xmmword ptr [temp_xmm9], xmm9
-    lea         rax, [h0]                                 ; load address of mul mask
-    vxorpd      ymm8, ymm8, ymm8                          ; zero accumulator high part
-    vxorpd      ymm9, ymm9, ymm9                          ; zero accumulator low part
-    vmovapd     ymm0, ymmword ptr [rcx]                   ; load oct1[high_half]
-    vmovapd     ymm1, ymmword ptr [rcx+32]                ; load oct1[low_half]
-    vmovapd     ymm2, ymmword ptr [rdx]                   ; load oct2[high_half]
-    vmovapd     ymm3, ymmword ptr [rdx+32]                ; load oct2[low_half]
+    vinsertf128  ymm10, ymm10, xmm6, 1                     ; save non-volatile lower 128 bits of xmm6 into volatile upper 128 bits of ymm10
+    vinsertf128  ymm11, ymm11, xmm7, 1                     ; save non-volatile lower 128 bits of xmm7 into volatile upper 128 bits of ymm11
+    vinsertf128  ymm12, ymm12, xmm8, 1                     ; save non-volatile lower 128 bits of xmm8 into volatile upper 128 bits of ymm12
+    vinsertf128  ymm13, ymm13, xmm9, 1                     ; save non-volatile lower 128 bits of xmm9 into volatile upper 128 bits of ymm13
+    lea          rax, [h0]                                 ; load address of mul mask
+    ;vxorpd       ymm8, ymm8, ymm8                          ; zero accumulator high part (commented out for optimize)
+    ;vxorpd       ymm9, ymm9, ymm9                          ; zero accumulator low part (commented out for optimize)
+    vmovapd      ymm0, ymmword ptr [rcx]                   ; load oct1[high_half]
+    vmovapd      ymm1, ymmword ptr [rcx+32]                ; load oct1[low_half]
+    vmovapd      ymm2, ymmword ptr [rdx]                   ; load oct2[high_half]
+    vmovapd      ymm3, ymmword ptr [rdx+32]                ; load oct2[low_half]
     ; e0 column
-    vpermpd     ymm4, ymm0, 00000000b                     ; ymm4 = o1e0, o1e0, o1e0, o1e0
-    vmovapd     ymm5, ymm4                                ; ymm5 = o1e0, o1e0, o1e0, o1e0
-    vpermpd     ymm6, ymm2, 11100100b                     ; ymm6 = o2e0, o2e1, o2e2, o2e3
-    vpermpd     ymm7, ymm3, 11100100b                     ; ymm7 = o2e4, o2e5, o2e6, o2e7
-    vmulpd      ymm4, ymm6, ymm4                          ; ymm4 = o1e0*o2e0, o1e0*o2e1, o1e0*o2e2, o1e0*o2e3
-    vmulpd      ymm5, ymm7, ymm5                          ; ymm5 = o1e0*o2e4, o1e0*o2e5, o1e0*o2e6, o1e0*o2e7
-    vfmadd231pd ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator
-    vfmadd231pd ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator
-    add         rax, 64                                   ; increment to next mult mask
+    vpermpd      ymm4, ymm0, 00000000b                     ; ymm4 = o1e0, o1e0, o1e0, o1e0
+    vmovapd      ymm5, ymm4                                ; ymm5 = o1e0, o1e0, o1e0, o1e0
+    vpermpd      ymm6, ymm2, 11100100b                     ; ymm6 = o2e0, o2e1, o2e2, o2e3
+    vpermpd      ymm7, ymm3, 11100100b                     ; ymm7 = o2e4, o2e5, o2e6, o2e7
+    vmulpd       ymm8, ymm6, ymm4                          ; ymm4 = o1e0*o2e0, o1e0*o2e1, o1e0*o2e2, o1e0*o2e3
+    vmulpd       ymm9, ymm7, ymm5                          ; ymm5 = o1e0*o2e4, o1e0*o2e5, o1e0*o2e6, o1e0*o2e7
+    ;vfmadd231pd  ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator (commented out for optimize)
+    ;vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator (commented out for optimize)
     ; e1 column
-    vpermpd     ymm4, ymm0, 01010101b                     ; ymm4 = o1e1, o1e1, o1e1, o1e1
-    vmovapd     ymm5, ymm4                                ; ymm5 = o1e1, o1e1, o1e1, o1e1
-    vpermpd     ymm6, ymm2, 10110001b                     ; ymm6 = o2e1, o2e0, o2e3, o2e2
-    vpermpd     ymm7, ymm3, 10110001b                     ; ymm7 = o2e5, o2e4, o2e7, o2e6
-    vmulpd      ymm4, ymm6, ymm4                          ; ymm4 = o1e1*o2e1, o1e1*o2e0, o1e1*o2e3, o1e1*o2e2
-    vmulpd      ymm5, ymm7, ymm5                          ; ymm5 = o1e1*o2e5, o1e1*o2e4, o1e1*o2e7, o1e1*o2e6
-    vfmadd231pd ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator
-    vfmadd231pd ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator
-    add         rax, 64                                   ; increment to next mult mask
+    vpermpd      ymm4, ymm0, 01010101b                     ; ymm4 = o1e1, o1e1, o1e1, o1e1
+    vmovapd      ymm5, ymm4                                ; ymm5 = o1e1, o1e1, o1e1, o1e1
+    vpermpd      ymm6, ymm2, 10110001b                     ; ymm6 = o2e1, o2e0, o2e3, o2e2
+    vpermpd      ymm7, ymm3, 10110001b                     ; ymm7 = o2e5, o2e4, o2e7, o2e6
+    vmulpd       ymm4, ymm6, ymm4                          ; ymm4 = o1e1*o2e1, o1e1*o2e0, o1e1*o2e3, o1e1*o2e2
+    vmulpd       ymm5, ymm7, ymm5                          ; ymm5 = o1e1*o2e5, o1e1*o2e4, o1e1*o2e7, o1e1*o2e6
+    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax+64]          ; multiply by mask and add to accumulator
+    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+96]          ; multiply by mask and add to accumulator
     ; e2 column
-    vpermpd     ymm4, ymm0, 10101010b                     ; ymm4 = o1e2, o1e2, o1e2, o1e2
-    vmovapd     ymm5, ymm4                                ; ymm5 = o1e2, o1e2, o1e2, o1e2
-    vpermpd     ymm6, ymm2, 01001110b                     ; ymm6 = o2e2, o2e3, o2e0, o2e1
-    vpermpd     ymm7, ymm3, 01001110b                     ; ymm7 = o2e6, o2e7, o2e4, o2e5
-    vmulpd      ymm4, ymm6, ymm4                          ; ymm4 = o1e2*o2e2, o1e2*o2e3, o1e2*o2e0, o1e2*o2e1
-    vmulpd      ymm5, ymm7, ymm5                          ; ymm5 = o1e2*o2e6, o1e2*o2e7, o1e2*o2e4, o1e2*o2e5
-    vfmadd231pd ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator
-    vfmadd231pd ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator
-    add         rax, 64                                   ; increment to next mult mask
+    vpermpd      ymm4, ymm0, 10101010b                     ; ymm4 = o1e2, o1e2, o1e2, o1e2
+    vmovapd      ymm5, ymm4                                ; ymm5 = o1e2, o1e2, o1e2, o1e2
+    vpermpd      ymm6, ymm2, 01001110b                     ; ymm6 = o2e2, o2e3, o2e0, o2e1
+    vpermpd      ymm7, ymm3, 01001110b                     ; ymm7 = o2e6, o2e7, o2e4, o2e5
+    vmulpd       ymm4, ymm6, ymm4                          ; ymm4 = o1e2*o2e2, o1e2*o2e3, o1e2*o2e0, o1e2*o2e1
+    vmulpd       ymm5, ymm7, ymm5                          ; ymm5 = o1e2*o2e6, o1e2*o2e7, o1e2*o2e4, o1e2*o2e5
+    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax+128]         ; multiply by mask and add to accumulator
+    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+160]         ; multiply by mask and add to accumulator
     ; e3 column
-    vpermpd     ymm4, ymm0, 11111111b                     ; ymm4 = o1e3, o1e3, o1e3, o1e3
-    vmovapd     ymm5, ymm4                                ; ymm5 = o1e3, o1e3, o1e3, o1e3
-    vpermpd     ymm6, ymm2, 00011011b                     ; ymm6 = o2e3, o2e2, o2e1, o2e0
-    vpermpd     ymm7, ymm3, 00011011b                     ; ymm7 = o2e7, o2e6, o2e5, o2e4
-    vmulpd      ymm4, ymm6, ymm4                          ; ymm4 = o1e3*o2e3, o1e3*o2e2, o1e3*o2e1, o1e3*o2e0
-    vmulpd      ymm5, ymm7, ymm5                          ; ymm5 = o1e3*o2e7, o1e3*o2e6, o1e3*o2e5, o1e3*o2e4
-    vfmadd231pd ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator
-    vfmadd231pd ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator
-    add         rax, 64                                   ; increment to next mult mask
+    vpermpd      ymm4, ymm0, 11111111b                     ; ymm4 = o1e3, o1e3, o1e3, o1e3
+    vmovapd      ymm5, ymm4                                ; ymm5 = o1e3, o1e3, o1e3, o1e3
+    vpermpd      ymm6, ymm2, 00011011b                     ; ymm6 = o2e3, o2e2, o2e1, o2e0
+    vpermpd      ymm7, ymm3, 00011011b                     ; ymm7 = o2e7, o2e6, o2e5, o2e4
+    vmulpd       ymm4, ymm6, ymm4                          ; ymm4 = o1e3*o2e3, o1e3*o2e2, o1e3*o2e1, o1e3*o2e0
+    vmulpd       ymm5, ymm7, ymm5                          ; ymm5 = o1e3*o2e7, o1e3*o2e6, o1e3*o2e5, o1e3*o2e4
+    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax+192]         ; multiply by mask and add to accumulator
+    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+224]         ; multiply by mask and add to accumulator
     ; e4 column
-    vpermpd     ymm4, ymm1, 00000000b                     ; ymm4 = o1e4, o1e4, o1e4, o1e4
-    vmovapd     ymm5, ymm4                                ; ymm5 = o1e4, o1e4, o1e4, o1e4
-    vpermpd     ymm6, ymm3, 11100100b                     ; ymm6 = o2e4, o2e5, o2e6, o2e7
-    vpermpd     ymm7, ymm2, 11100100b                     ; ymm7 = o2e0, o2e1, o2e2, o2e3
-    vmulpd      ymm4, ymm6, ymm4                          ; ymm4 = o1e4*o2e4, o1e4*o2e5, o1e4*o2e6, o1e4*o2e7
-    vmulpd      ymm5, ymm7, ymm5                          ; ymm5 = o1e4*o2e0, o1e4*o2e1, o1e4*o2e2, o1e4*o2e3
-    vfmadd231pd ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator
-    vfmadd231pd ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator
-    add         rax, 64                                   ; increment to next mult mask
+    vpermpd      ymm4, ymm1, 00000000b                     ; ymm4 = o1e4, o1e4, o1e4, o1e4
+    vmovapd      ymm5, ymm4                                ; ymm5 = o1e4, o1e4, o1e4, o1e4
+    vpermpd      ymm6, ymm3, 11100100b                     ; ymm6 = o2e4, o2e5, o2e6, o2e7
+    vpermpd      ymm7, ymm2, 11100100b                     ; ymm7 = o2e0, o2e1, o2e2, o2e3
+    vmulpd       ymm4, ymm6, ymm4                          ; ymm4 = o1e4*o2e4, o1e4*o2e5, o1e4*o2e6, o1e4*o2e7
+    vmulpd       ymm5, ymm7, ymm5                          ; ymm5 = o1e4*o2e0, o1e4*o2e1, o1e4*o2e2, o1e4*o2e3
+    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax+256]         ; multiply by mask and add to accumulator
+    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+288]         ; multiply by mask and add to accumulator
     ; e5 column
-    vpermpd     ymm4, ymm1, 01010101b                     ; ymm4 = o1e5, o1e5, o1e5, o1e5
-    vmovapd     ymm5, ymm4                                ; ymm5 = o1e5, o1e5, o1e5, o1e5
-    vpermpd     ymm6, ymm3, 10110001b                     ; ymm6 = o2e5, o2e4, o2e7, o2e6
-    vpermpd     ymm7, ymm2, 10110001b                     ; ymm7 = o2e1, o2e0, o2e3, o2e2
-    vmulpd      ymm4, ymm6, ymm4                          ; ymm4 = o1e5*o2e5, o1e5*o2e4, o1e5*o2e7, o1e5*o2e6
-    vmulpd      ymm5, ymm7, ymm5                          ; ymm5 = o1e5*o2e1, o1e5*o2e0, o11k*o2e3, o1e5*o2e2
-    vfmadd231pd ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator
-    vfmadd231pd ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator
-    add         rax, 64                                   ; increment to next mult mask
+    vpermpd      ymm4, ymm1, 01010101b                     ; ymm4 = o1e5, o1e5, o1e5, o1e5
+    vmovapd      ymm5, ymm4                                ; ymm5 = o1e5, o1e5, o1e5, o1e5
+    vpermpd      ymm6, ymm3, 10110001b                     ; ymm6 = o2e5, o2e4, o2e7, o2e6
+    vpermpd      ymm7, ymm2, 10110001b                     ; ymm7 = o2e1, o2e0, o2e3, o2e2
+    vmulpd       ymm4, ymm6, ymm4                          ; ymm4 = o1e5*o2e5, o1e5*o2e4, o1e5*o2e7, o1e5*o2e6
+    vmulpd       ymm5, ymm7, ymm5                          ; ymm5 = o1e5*o2e1, o1e5*o2e0, o11k*o2e3, o1e5*o2e2
+    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax+320]         ; multiply by mask and add to accumulator
+    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+352]         ; multiply by mask and add to accumulator
     ; e6 column
-    vpermpd     ymm4, ymm1, 10101010b                     ; ymm4 = o1e6, o1e6, o1e6, o1e6
-    vmovapd     ymm5, ymm4                                ; ymm5 = o1e6, o1e6, o1e6, o1e6
-    vpermpd     ymm6, ymm3, 01001110b                     ; ymm6 = o2e6, o2e7, o2e4, o2e5
-    vpermpd     ymm7, ymm2, 01001110b                     ; ymm7 = o2e2, o2e3, o2e0, o2e1
-    vmulpd      ymm4, ymm6, ymm4                          ; ymm4 = o1e6*o2e6, o1e6*o2e7, o1e6*o2e4, o1e6*o2e5
-    vmulpd      ymm5, ymm7, ymm5                          ; ymm5 = o1e6*o2e2, o1e6*o2e3, o1e6*o2e0, o1e6*o2e1
-    vfmadd231pd ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator
-    vfmadd231pd ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator
-    add         rax, 64                                   ; increment to next mult mask
+    vpermpd      ymm4, ymm1, 10101010b                     ; ymm4 = o1e6, o1e6, o1e6, o1e6
+    vmovapd      ymm5, ymm4                                ; ymm5 = o1e6, o1e6, o1e6, o1e6
+    vpermpd      ymm6, ymm3, 01001110b                     ; ymm6 = o2e6, o2e7, o2e4, o2e5
+    vpermpd      ymm7, ymm2, 01001110b                     ; ymm7 = o2e2, o2e3, o2e0, o2e1
+    vmulpd       ymm4, ymm6, ymm4                          ; ymm4 = o1e6*o2e6, o1e6*o2e7, o1e6*o2e4, o1e6*o2e5
+    vmulpd       ymm5, ymm7, ymm5                          ; ymm5 = o1e6*o2e2, o1e6*o2e3, o1e6*o2e0, o1e6*o2e1
+    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax+384]         ; multiply by mask and add to accumulator
+    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+416]         ; multiply by mask and add to accumulator
     ; e7 column
-    vpermpd     ymm4, ymm1, 11111111b                     ; ymm4 = o1e7, o1e7, o1e7, o1e7
-    vmovapd     ymm5, ymm4                                ; ymm5 = o1e7, o1e7, o1e7, o1e7
-    vpermpd     ymm6, ymm3, 00011011b                     ; ymm6 = o2e7, o2e6, o2e5, o2e4
-    vpermpd     ymm7, ymm2, 00011011b                     ; ymm7 = o2e3, o2e2, o2e1, o2e0
-    vmulpd      ymm4, ymm6, ymm4                          ; ymm4 = o1e7*o2e7, o1e7*o2e6, o1e7*o2e5, o1e7*o2e4
-    vmulpd      ymm5, ymm7, ymm5                          ; ymm5 = o1e7*o2e3, o1e7*o2e2, o1e7*o2e1, o1e7*o2e0
-    vfmadd231pd ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator
-    vfmadd231pd ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator
-    vmovapd     ymmword ptr [r8], ymm8                    ; return low quaternion of octonion result
-    vmovapd     ymmword ptr [r8+32], ymm9                 ; return high quaternion of octonion result
-    vmovapd     xmm6, xmmword ptr [temp_xmm6]
-    vmovapd     xmm7, xmmword ptr [temp_xmm7]
-    vmovapd     xmm8, xmmword ptr [temp_xmm8]
-    vmovapd     xmm9, xmmword ptr [temp_xmm9]
+    vpermpd      ymm4, ymm1, 11111111b                     ; ymm4 = o1e7, o1e7, o1e7, o1e7
+    vmovapd      ymm5, ymm4                                ; ymm5 = o1e7, o1e7, o1e7, o1e7
+    vpermpd      ymm6, ymm3, 00011011b                     ; ymm6 = o2e7, o2e6, o2e5, o2e4
+    vpermpd      ymm7, ymm2, 00011011b                     ; ymm7 = o2e3, o2e2, o2e1, o2e0
+    vmulpd       ymm4, ymm6, ymm4                          ; ymm4 = o1e7*o2e7, o1e7*o2e6, o1e7*o2e5, o1e7*o2e4
+    vmulpd       ymm5, ymm7, ymm5                          ; ymm5 = o1e7*o2e3, o1e7*o2e2, o1e7*o2e1, o1e7*o2e0
+    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax+448]         ; multiply by mask and add to accumulator
+    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+480]         ; multiply by mask and add to accumulator
+    vmovapd      ymmword ptr [r8], ymm8                    ; return low quaternion of octonion result
+    vmovapd      ymmword ptr [r8+32], ymm9                 ; return high quaternion of octonion result
+    vextractf128 xmm6, ymm10, 1                            ; restore non-volatile lower 128 bits of xmm6 from volatile upper 128 bits of ymm10
+    vextractf128 xmm7, ymm11, 1                            ; restore non-volatile lower 128 bits of xmm7 from volatile upper 128 bits of ymm11
+    vextractf128 xmm8, ymm12, 1                            ; restore non-volatile lower 128 bits of xmm8 from volatile upper 128 bits of ymm12
+    vextractf128 xmm9, ymm13, 1                            ; restore non-volatile lower 128 bits of xmm9 from volatile upper 128 bits of ymm13
     ret
 octonion_mul64_AVX2 endp
-; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-; =================================================================================================================
-
-
-; =================================================================================================================
-; octonion double precision normal AVX2
-; =================================================================================================================
-; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-;
-; The math
-;   result = e0*e0 + e1*e1 + e2*e2 + e3*e3 + e4*e4 + e5*e5 + e6*e6 + e7*e7
-;
-; -----------------------------------------------------------------------------------------------------------------
-;
-; notes:
-;
-; -----------------------------------------------------------------------------------------------------------------
-;
-; C prototype:
-;
-; void octonion_norm64_AVX2(octonion64 *o1, double *result);
-;
-; -----------------------------------------------------------------------------------------------------------------
-;
-public octonion_norm64_AVX2
-octonion_norm64_AVX2 proc
-    vmovapd      ymm0, ymmword ptr [rcx]
-    vmovapd      ymm1, ymmword ptr [rcx+32]
-    vmulpd       ymm0, ymm0, ymm0
-    vmulpd       ymm1, ymm1, ymm1
-    vextractf128 xmm3,ymm0,1
-    vaddpd       xmm3,xmm3,xmm0
-    vmovaps      xmm4,xmm3
-    vshufpd      xmm4,xmm4,xmm3,1
-    vaddpd       xmm4,xmm4,xmm3
-    movaps       xmm0,xmm4
-    vextractf128 xmm3,ymm1,1
-    vaddpd       xmm3,xmm3,xmm1
-    vmovaps      xmm4,xmm3
-    vshufpd      xmm4,xmm4,xmm3,1
-    vaddpd       xmm4,xmm4,xmm3
-    movaps       xmm1,xmm4
-    vaddpd       xmm0, xmm0, xmm1
-    vmovq        qword ptr [rdx], xmm0
-    ret
-octonion_norm64_AVX2 endp
 ; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 ; =================================================================================================================
 
@@ -400,36 +392,35 @@ octonion_norm64_AVX2 endp
 ;
 public octonion_div64_AVX2
 octonion_div64_AVX2 proc
-    vmovapd      xmmword ptr [temp_xmm6], xmm6             ; windows ABI expects ymm6-ymm15 non-volatile
-    vmovapd      xmmword ptr [temp_xmm7], xmm7
-    vmovapd      xmmword ptr [temp_xmm8], xmm8
-    vmovapd      xmmword ptr [temp_xmm9], xmm9
-    vmovapd      xmmword ptr [temp_xmm10], xmm10
+    vinsertf128  ymm10, ymm10, xmm6, 1                     ; save non-volatile lower 128 bits of xmm6 into volatile upper 128 bits of ymm10
+    vinsertf128  ymm11, ymm11, xmm7, 1                     ; save non-volatile lower 128 bits of xmm7 into volatile upper 128 bits of ymm11
+    vinsertf128  ymm12, ymm12, xmm8, 1                     ; save non-volatile lower 128 bits of xmm8 into volatile upper 128 bits of ymm12
+    vinsertf128  ymm13, ymm13, xmm9, 1                     ; save non-volatile lower 128 bits of xmm9 into volatile upper 128 bits of ymm13
+    vinsertf128  ymm14, ymm14, xmm10, 1                    ; save non-volatile lower 128 bits of xmm10 into volatile upper 128 bits of ymm14
     vmovapd      ymm0, ymmword ptr [rdx]
     vmovapd      ymm1, ymmword ptr [rdx+32]
-    vmulpd       ymm0, ymm0, ymm0                          ; calculate the norm for o2
-    vmulpd       ymm1, ymm1, ymm1
-    vextractf128 xmm3,ymm0,1
-    vaddpd       xmm3,xmm3,xmm0
-    vmovaps      xmm4,xmm3
-    vshufpd      xmm4,xmm4,xmm3,1
-    vaddpd       xmm4,xmm4,xmm3
-    movaps       xmm0,xmm4
-    vextractf128 xmm3,ymm1,1
-    vaddpd       xmm3,xmm3,xmm1
-    vmovaps      xmm4,xmm3
-    vshufpd      xmm4,xmm4,xmm3,1
-    vaddpd       xmm4,xmm4,xmm3
-    movaps       xmm1,xmm4
-    vaddpd       xmm0, xmm0, xmm1
+    vmovapd      ymm5, ymm0                                ; save for later
+    vmovapd      ymm6, ymm1                                ; ditto
+    vmulpd       ymm0, ymm0, ymm0                          ; ymm0 = o1e0*o1e0, o1e1*o1e1, o1e2*o1e2, o1e3*o1e3
+    vmulpd       ymm1, ymm1, ymm1                          ; ymm1 = o1e4*o1e4, o1e5*o1e5, o1e6*o1e6, o1e7*o1e7
+    vextractf128 xmm3, ymm0, 1                             ; xmm3 = o1e2*o1e2, o1e3*o1e3
+    vaddpd       xmm3, xmm3, xmm0                          ; xmm3 = o1e2*o1e2+o1e0*o1e0, o1e3*o1e3+o1e1*o1e1
+    vmovapd      xmm4, xmm3                                ; xmm4 = o1e2*o1e2+o1e0*o1e0, o1e3*o1e3+o1e1*o1e1
+    vshufpd      xmm4, xmm4, xmm3, 1                       ; xmm4 = o1e3*o1e3+o1e1*o1e1, o1e2*o1e2+o1e0*o1e0
+    vaddpd       xmm0, xmm4, xmm3                          ; xmm0 = o1e3*o1e3+o1e1*o1e1+o1e2*o1e2+o1e0*o1e0, o1e2*o1e2+o1e0*o1e0+o1e3*o1e3+o1e1*o1e1
+    vextractf128 xmm3, ymm1, 1                             ; xmm3 = o1e6*o1e6, o1e7*o1e7
+    vaddpd       xmm3, xmm3, xmm1                          ; xmm3 = o1e6*o1e6+o1e4*o1e4, o1e7*o1e7+o1e5*o1e5
+    vshufpd      xmm4, xmm3, xmm3,1                        ; xmm4 = o1e7*o1e7+o1e5*o1e5, o1e6*o1e6+o1e4*o1e4
+    vaddpd       xmm4, xmm4, xmm3                          ; xmm4 = o1e7*o1e7+o1e5*o1e5+o1e6*o1e6+o1e4*o1e4, o1e6*o1e6+o1e4*o1e4+o1e7*o1e7+o1e5*o1e5
+    vaddpd       xmm0, xmm0, xmm4                          ; xmm0 = o1e3*o1e3+o1e1*o1e1+o1e2*o1e2+o1e0*o1e0+o1e7*o1e7+o1e5*o1e5+o1e6*o1e6+o1e4*o1e4, o1e2*o1e2+o1e0*o1e0+o1e3*o1e3+o1e1*o1e1+o1e6*o1e6+o1e4*o1e4+o1e7*o1e7+o1e5*o1e5
     vpermpd      ymm10, ymm0, 00000000b                    ; ymm10 = o2norm, o2norm, o2norm, o2norm
-    lea          rax, [h0]                                 ; load address of mul mask
-    vxorpd       ymm8, ymm8, ymm8                          ; zero accumulator high part
-    vxorpd       ymm9, ymm9, ymm9                          ; zero accumulator low part
-    vmovapd      ymm0, ymmword ptr [rcx]                   ; load oct1[high_half]
-    vmovapd      ymm1, ymmword ptr [rcx+32]                ; load oct1[low_half]
-    vmovapd      ymm2, ymmword ptr [rdx]                   ; load oct2[high_half]
-    vmovapd      ymm3, ymmword ptr [rdx+32]                ; load oct2[low_half]
+    lea          rax, [t0]                                 ; rax = addr div mask
+    vmovapd      ymm0, ymmword ptr [rcx]                   ; ymm0 = o1e0, o1e1, o1e2, o1e3
+    vmovapd      ymm1, ymmword ptr [rcx+32]                ; ymm1 = o1e4, o1e5, o1e6, o1e7
+    vxorpd       ymm8, ymm8, ymm8                          ; ymm8 = 0
+    vxorpd       ymm9, ymm9, ymm9                          ; ymm9 = 0
+    vmovapd      ymm2, ymm5                                ; ymm2 = o2e0, o2e1, o2e2, o2e3
+    vmovapd      ymm3, ymm6                                ; ymm3 = o2e4, o2e5, o2e6, o2e7
     ; e0 column
     vpermpd      ymm4, ymm0, 00000000b                     ; ymm4 = o1e0, o1e0, o1e0, o1e0
     vmovapd      ymm5, ymm4                                ; ymm5 = o1e0, o1e0, o1e0, o1e0
@@ -437,9 +428,8 @@ octonion_div64_AVX2 proc
     vpermpd      ymm7, ymm3, 11100100b                     ; ymm7 = o2e4, o2e5, o2e6, o2e7
     vmulpd       ymm4, ymm6, ymm4                          ; ymm4 = o1e0*o2e0, o1e0*o2e1, o1e0*o2e2, o1e0*o2e3
     vmulpd       ymm5, ymm7, ymm5                          ; ymm5 = o1e0*o2e4, o1e0*o2e5, o1e0*o2e6, o1e0*o2e7
-    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator
-    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator
-    add          rax, 64                                   ; increment to next mult mask
+    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax]             ; ymm8 = ymm8 + (o1e0*o2e0*t0[0], o1e0*o2e1*t0[1], o1e0*o2e2*t0[2], o1e0*o2e3*t0[3])
+    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+32]          ; ymm9 = ymm9 + (o1e0*o2e4*t0[4], o1e0*o2e5*t0[5], o1e0*o2e6*t0[6], o1e0*o2e7*t0[7])
     ; e1 column
     vpermpd      ymm4, ymm0, 01010101b                     ; ymm4 = o1e1, o1e1, o1e1, o1e1
     vmovapd      ymm5, ymm4                                ; ymm5 = o1e1, o1e1, o1e1, o1e1
@@ -447,9 +437,8 @@ octonion_div64_AVX2 proc
     vpermpd      ymm7, ymm3, 10110001b                     ; ymm7 = o2e5, o2e4, o2e7, o2e6
     vmulpd       ymm4, ymm6, ymm4                          ; ymm4 = o1e1*o2e1, o1e1*o2e0, o1e1*o2e3, o1e1*o2e2
     vmulpd       ymm5, ymm7, ymm5                          ; ymm5 = o1e1*o2e5, o1e1*o2e4, o1e1*o2e7, o1e1*o2e6
-    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator
-    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator
-    add          rax, 64                                   ; increment to next mult mask
+    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax+64]          ; multiply by mask and add to accumulator
+    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+96]          ; multiply by mask and add to accumulator
     ; e2 column
     vpermpd      ymm4, ymm0, 10101010b                     ; ymm4 = o1e2, o1e2, o1e2, o1e2
     vmovapd      ymm5, ymm4                                ; ymm5 = o1e2, o1e2, o1e2, o1e2
@@ -457,9 +446,8 @@ octonion_div64_AVX2 proc
     vpermpd      ymm7, ymm3, 01001110b                     ; ymm7 = o2e6, o2e7, o2e4, o2e5
     vmulpd       ymm4, ymm6, ymm4                          ; ymm4 = o1e2*o2e2, o1e2*o2e3, o1e2*o2e0, o1e2*o2e1
     vmulpd       ymm5, ymm7, ymm5                          ; ymm5 = o1e2*o2e6, o1e2*o2e7, o1e2*o2e4, o1e2*o2e5
-    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator
-    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator
-    add          rax, 64                                   ; increment to next mult mask
+    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax+128]         ; multiply by mask and add to accumulator
+    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+160]         ; multiply by mask and add to accumulator
     ; e3 column
     vpermpd      ymm4, ymm0, 11111111b                     ; ymm4 = o1e3, o1e3, o1e3, o1e3
     vmovapd      ymm5, ymm4                                ; ymm5 = o1e3, o1e3, o1e3, o1e3
@@ -467,9 +455,8 @@ octonion_div64_AVX2 proc
     vpermpd      ymm7, ymm3, 00011011b                     ; ymm7 = o2e7, o2e6, o2e5, o2e4
     vmulpd       ymm4, ymm6, ymm4                          ; ymm4 = o1e3*o2e3, o1e3*o2e2, o1e3*o2e1, o1e3*o2e0
     vmulpd       ymm5, ymm7, ymm5                          ; ymm5 = o1e3*o2e7, o1e3*o2e6, o1e3*o2e5, o1e3*o2e4
-    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator
-    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator
-    add          rax, 64                                   ; increment to next mult mask
+    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax+192]         ; multiply by mask and add to accumulator
+    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+224]         ; multiply by mask and add to accumulator
     ; e4 column
     vpermpd      ymm4, ymm1, 00000000b                     ; ymm4 = o1e4, o1e4, o1e4, o1e4
     vmovapd      ymm5, ymm4                                ; ymm5 = o1e4, o1e4, o1e4, o1e4
@@ -477,9 +464,8 @@ octonion_div64_AVX2 proc
     vpermpd      ymm7, ymm2, 11100100b                     ; ymm7 = o2e0, o2e1, o2e2, o2e3
     vmulpd       ymm4, ymm6, ymm4                          ; ymm4 = o1e4*o2e4, o1e4*o2e5, o1e4*o2e6, o1e4*o2e7
     vmulpd       ymm5, ymm7, ymm5                          ; ymm5 = o1e4*o2e0, o1e4*o2e1, o1e4*o2e2, o1e4*o2e3
-    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator
-    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator
-    add          rax, 64                                   ; increment to next mult mask
+    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax+256]         ; multiply by mask and add to accumulator
+    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+288]         ; multiply by mask and add to accumulator
     ; e5 column
     vpermpd      ymm4, ymm1, 01010101b                     ; ymm4 = o1e5, o1e5, o1e5, o1e5
     vmovapd      ymm5, ymm4                                ; ymm5 = o1e5, o1e5, o1e5, o1e5
@@ -487,9 +473,8 @@ octonion_div64_AVX2 proc
     vpermpd      ymm7, ymm2, 10110001b                     ; ymm7 = o2e1, o2e0, o2e3, o2e2
     vmulpd       ymm4, ymm6, ymm4                          ; ymm4 = o1e5*o2e5, o1e5*o2e4, o1e5*o2e7, o1e5*o2e6
     vmulpd       ymm5, ymm7, ymm5                          ; ymm5 = o1e5*o2e1, o1e5*o2e0, o11k*o2e3, o1e5*o2e2
-    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator
-    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator
-    add          rax, 64                                   ; increment to next mult mask
+    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax+320]         ; multiply by mask and add to accumulator
+    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+352]         ; multiply by mask and add to accumulator
     ; e6 column
     vpermpd      ymm4, ymm1, 10101010b                     ; ymm4 = o1e6, o1e6, o1e6, o1e6
     vmovapd      ymm5, ymm4                                ; ymm5 = o1e6, o1e6, o1e6, o1e6
@@ -497,9 +482,8 @@ octonion_div64_AVX2 proc
     vpermpd      ymm7, ymm2, 01001110b                     ; ymm7 = o2e2, o2e3, o2e0, o2e1
     vmulpd       ymm4, ymm6, ymm4                          ; ymm4 = o1e6*o2e6, o1e6*o2e7, o1e6*o2e4, o1e6*o2e5
     vmulpd       ymm5, ymm7, ymm5                          ; ymm5 = o1e6*o2e2, o1e6*o2e3, o1e6*o2e0, o1e6*o2e1
-    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator
-    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator
-    add          rax, 64                                   ; increment to next mult mask
+    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax+384]         ; multiply by mask and add to accumulator
+    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+416]         ; multiply by mask and add to accumulator
     ; e7 column
     vpermpd      ymm4, ymm1, 11111111b                     ; ymm4 = o1e7, o1e7, o1e7, o1e7
     vmovapd      ymm5, ymm4                                ; ymm5 = o1e7, o1e7, o1e7, o1e7
@@ -507,19 +491,108 @@ octonion_div64_AVX2 proc
     vpermpd      ymm7, ymm2, 00011011b                     ; ymm7 = o2e3, o2e2, o2e1, o2e0
     vmulpd       ymm4, ymm6, ymm4                          ; ymm4 = o1e7*o2e7, o1e7*o2e6, o1e7*o2e5, o1e7*o2e4
     vmulpd       ymm5, ymm7, ymm5                          ; ymm5 = o1e7*o2e3, o1e7*o2e2, o1e7*o2e1, o1e7*o2e0
-    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax]             ; multiply by mask and add to accumulator
-    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+32]          ; multiply by mask and add to accumulator
+    vfmadd231pd  ymm8, ymm4, ymmword ptr [rax+448]         ; multiply by mask and add to accumulator
+    vfmadd231pd  ymm9, ymm5, ymmword ptr [rax+480]         ; multiply by mask and add to accumulator
     vdivpd       ymm8, ymm8, ymm10
     vdivpd       ymm9, ymm9, ymm10
     vmovapd      ymmword ptr [r8], ymm8                    ; return low quaternion of octonion result
     vmovapd      ymmword ptr [r8+32], ymm9                 ; return high quaternion of octonion result
-    vmovapd      xmm10, xmmword ptr [temp_xmm10]
-    vmovapd      xmm6, xmmword ptr [temp_xmm6]
-    vmovapd      xmm7, xmmword ptr [temp_xmm7]
-    vmovapd      xmm8, xmmword ptr [temp_xmm8]
-    vmovapd      xmm9, xmmword ptr [temp_xmm9]
+    vextractf128 xmm6, ymm10, 1                            ; restore non-volatile lower 128 bits of xmm6 from volatile upper 128 bits of ymm10
+    vextractf128 xmm7, ymm11, 1                            ; restore non-volatile lower 128 bits of xmm7 from volatile upper 128 bits of ymm11
+    vextractf128 xmm8, ymm12, 1                            ; restore non-volatile lower 128 bits of xmm8 from volatile upper 128 bits of ymm12
+    vextractf128 xmm9, ymm13, 1                            ; restore non-volatile lower 128 bits of xmm9 from volatile upper 128 bits of ymm13
+    vextractf128 xmm10, ymm14, 1                           ; restore non-volatile lower 128 bits of xmm10 from volatile upper 128 bits of ymm14
     ret
 octonion_div64_AVX2 endp
+; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+; =================================================================================================================
+
+
+; =================================================================================================================
+; octonion double precision scalar multiplication AVX2
+; =================================================================================================================
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;
+; The math:
+;
+; o1e0*s -> e0
+; o1e1*s -> e1
+; o1e2*s -> e2
+; o1e3*s -> e3
+; o1e4*s -> e4
+; o1e5*s -> e5
+; o1e6*s -> e6
+; o1e7*s -> e7
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+; notes:
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+; C prototype:
+;
+; void octonion_mul64s_AVX2(octonion64 *o1, double *s, octonion64 *result);
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+public octonion_mul64s_AVX2
+octonion_mul64s_AVX2 proc
+    vmovapd      ymm0, ymmword ptr [rcx]
+    vmovapd      ymm1, ymmword ptr [rcx+32]
+    vbroadcastsd ymm2, qword ptr [rdx]
+   ;vbroadcastsd ymm3, xmm2                                ; stalls waiting on xmm2 to load
+    vbroadcastsd ymm3, qword ptr [rdx]                     ; s will be in L1, don't stall
+    vmulpd       ymm0, ymm0, ymm2
+    vmulpd       ymm1, ymm1, ymm3
+    vmovapd      ymmword ptr [r8], ymm0
+    vmovapd      ymmword ptr [r8+32], ymm1
+    ret
+octonion_mul64s_AVX2 endp
+; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+; =================================================================================================================
+
+
+; =================================================================================================================
+; octonion double precision scalar division AVX2
+; =================================================================================================================
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;
+; The math:
+;
+; o1e0/s -> e0
+; o1e1/s -> e1
+; o1e2/s -> e2
+; o1e3/s -> e3
+; o1e4/s -> e4
+; o1e5/s -> e5
+; o1e6/s -> e6
+; o1e7/s -> e7
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+; notes:
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+; C prototype:
+;
+; void octonion_div64s_AVX2(octonion64 *o1, double *s, octonion64 *result);
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+public octonion_div64s_AVX2
+octonion_div64s_AVX2 proc
+    vmovapd      ymm0, ymmword ptr [rcx]
+    vmovapd      ymm1, ymmword ptr [rcx+32]
+    vbroadcastsd ymm2, qword ptr [rdx]
+    vbroadcastsd ymm3, qword ptr [rdx]
+    vdivpd       ymm0, ymm0, ymm2
+    vdivpd       ymm1, ymm1, ymm3
+    vmovapd      ymmword ptr [r8], ymm0
+    vmovapd      ymmword ptr [r8+32], ymm1
+    ret
+octonion_div64s_AVX2 endp
 ; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 ; =================================================================================================================
 
@@ -608,6 +681,57 @@ octonion_sub64_AVX2 endp
 ; =================================================================================================================
 
 
+; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+; AVX2
+; =================================================================================================================
+; =================================================================================================================
+
+; *****************************************************************************************************************
+; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+; *****************************************************************************************************************
+
+; =================================================================================================================
+; =================================================================================================================
+; AVX-512
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+; =================================================================================================================
+; octonion double precision normal AVX-512
+; =================================================================================================================
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;
+; The math:
+;   result = e0*e0 + e1*e1 + e2*e2 + e3*e3 + e4*e4 + e5*e5 + e6*e6 + e7*e7
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+; notes:
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+; C prototype:
+;
+; void octonion_norm64_AVX512(octonion64 *o, double *result);
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+public octonion_norm64_AVX512
+octonion_norm64_AVX512 proc
+    vmovupd       zmm1, zmmword ptr [rcx]
+    vmulpd        zmm1, zmm1, zmm1
+    vextractf64x4 ymm0, zmm1, 1
+    vaddpd        ymm2, ymm0, ymm1
+    vextractf64x2 xmm0, ymm2, 1
+    vaddpd        xmm1, xmm0, xmm2
+    vpsrldq       xmm0, xmm1, 8
+    vaddsd        xmm0, xmm0, xmm1
+    vmovq         qword ptr [rdx], xmm0
+    ret
+octonion_norm64_AVX512 endp
+; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+; =================================================================================================================
+
+
 ; =================================================================================================================
 ; octonion double precision multiplication AVX-512
 ; =================================================================================================================
@@ -615,15 +739,15 @@ octonion_sub64_AVX2 endp
 ;
 ; The math:
 ; h0          h1          h2          h3          h4          h5          h6          h7
-; o1e0*o2e0 - o1e1*o2e1 - o1e2*o2e2 - o1e3*o2e3 - o1e4*o2e4 - o1e5*o2e5 - o1e6*o2e6 - o1e7*o2e7 -> o3e0
-; o1e0*o2e1 + o1e1*o2e0 + o1e2*o2e3 - o1e3*o2e2 + o1e4*o2e5 - o1e5*o2e4 - o1e6*o2e7 + o1e7*o2e6 -> o3e1
-; o1e0*o2e2 - o1e1*o2e3 + o1e2*o2e0 + o1e3*o2e1 + o1e4*o2e6 + o1e5*o2e7 - o1e6*o2e4 - o1e7*o2e5 -> o3e2
-; o1e0*o2e3 + o1e1*o2e2 - o1e2*o2e1 + o1e3*o2e0 + o1e4*o2e7 - o1e5*o2e6 + o1e6*o2e5 - o1e7*o2e4 -> o3e3
+; o1e0*o2e0 - o1e1*o2e1 - o1e2*o2e2 - o1e3*o2e3 - o1e4*o2e4 - o1e5*o2e5 - o1e6*o2e6 - o1e7*o2e7 -> e0
+; o1e0*o2e1 + o1e1*o2e0 + o1e2*o2e3 - o1e3*o2e2 + o1e4*o2e5 - o1e5*o2e4 - o1e6*o2e7 + o1e7*o2e6 -> e1
+; o1e0*o2e2 - o1e1*o2e3 + o1e2*o2e0 + o1e3*o2e1 + o1e4*o2e6 + o1e5*o2e7 - o1e6*o2e4 - o1e7*o2e5 -> e2
+; o1e0*o2e3 + o1e1*o2e2 - o1e2*o2e1 + o1e3*o2e0 + o1e4*o2e7 - o1e5*o2e6 + o1e6*o2e5 - o1e7*o2e4 -> e3
 ; h8          h9          ha          hb          hc          hd          he          hf
-; o1e0*o2e4 - o1e1*o2e5 - o1e2*o2e6 - o1e3*o2e7 + o1e4*o2e0 + o1e5*o2e1 + o1e6*o2e2 + o1e7*o2e3 -> o3e4
-; o1e0*o2e5 + o1e1*o2e4 - o1e2*o2e7 + o1e3*o2e6 - o1e4*o2e1 + o1e5*o2e0 - o1e6*o2e3 + o1e7*o2e2 -> o3e5
-; o1e0*o2e6 + o1e1*o2e7 + o1e2*o2e4 - o1e3*o2e5 - o1e4*o2e2 + o1e5*o2e3 + o1e6*o2e0 - o1e7*o2e1 -> o3e6
-; o1e0*o2e7 - o1e1*o2e6 + o1e2*o2e5 + o1e3*o2e4 - o1e4*o2e3 - o1e5*o2e2 + o1e6*o2e1 + o1e7*o2e0 -> o3e7
+; o1e0*o2e4 - o1e1*o2e5 - o1e2*o2e6 - o1e3*o2e7 + o1e4*o2e0 + o1e5*o2e1 + o1e6*o2e2 + o1e7*o2e3 -> e4
+; o1e0*o2e5 + o1e1*o2e4 - o1e2*o2e7 + o1e3*o2e6 - o1e4*o2e1 + o1e5*o2e0 - o1e6*o2e3 + o1e7*o2e2 -> e5
+; o1e0*o2e6 + o1e1*o2e7 + o1e2*o2e4 - o1e3*o2e5 - o1e4*o2e2 + o1e5*o2e3 + o1e6*o2e0 - o1e7*o2e1 -> e6
+; o1e0*o2e7 - o1e1*o2e6 + o1e2*o2e5 + o1e3*o2e4 - o1e4*o2e3 - o1e5*o2e2 + o1e6*o2e1 + o1e7*o2e0 -> e7
 ;
 ; -----------------------------------------------------------------------------------------------------------------
 ;
@@ -639,92 +763,71 @@ octonion_sub64_AVX2 endp
 ;
 public octonion_mul64_AVX512
 octonion_mul64_AVX512 proc
-    vmovapd     xmmword ptr [temp_xmm6], xmm6
-    vxorpd      zmm6, zmm6, zmm6
+    vinsertf128  ymm10, ymm10, xmm6, 1             ; save non-volatile lower 128 bits of xmm6 into volatile upper 128 bits of ymm10
+    vxorpd       zmm6, zmm6, zmm6
     ; e0 column
-    vmovapd     zmm0, zmmword ptr [rcx]       ; load oct1
-    vmovapd     zmm1, zmmword ptr [rdx]       ; load oct2
-    lea         rax, byte ptr [n0]            ; oct1 perm mask ptr
-    lea         r9, byte ptr [m0]             ; oct2 perm mask ptr
-    lea         rcx, byte ptr [h0]            ; mult mask ptr
-    vmovapd     zmm2, zmmword ptr [rax]       ; load oct1 perm mask
-    vmovapd     zmm3, zmmword ptr [r9]        ; load oct2 perm mask
-    vpermpd     zmm4, zmm2, zmm0              ; perm oct1 by mask into zmm4
-    vpermpd     zmm5, zmm3, zmm1              ; perm oct2 by mask into zmm5
-    vmulpd      zmm4, zmm4, zmmword ptr [rcx] ; mult oct1 perm by mult mask
-    vfmadd231pd zmm6, zmm4, zmm5              ; mult oct1 by oct2 after perms and add to accumulator
-    add         rax, 64
-    add         r9, 64
-    add         rcx, 64
+    vmovapd      zmm0, zmmword ptr [rcx]           ; load oct1
+    vmovapd      zmm1, zmmword ptr [rdx]           ; load oct2
+    lea          rax, byte ptr [n0]                ; oct1 perm mask ptr
+    lea          r9, byte ptr [m0]                 ; oct2 perm mask ptr
+    lea          rcx, byte ptr [h0]                ; mult mask ptr
+    vmovapd      zmm2, zmmword ptr [rax]           ; load oct1 perm mask
+    vmovapd      zmm3, zmmword ptr [r9]            ; load oct2 perm mask
+    vpermpd      zmm4, zmm2, zmm0                  ; perm oct1 by mask into zmm4
+    vpermpd      zmm5, zmm3, zmm1                  ; perm oct2 by mask into zmm5
+    vmulpd       zmm4, zmm4, zmmword ptr [rcx]     ; mult oct1 perm by mult mask
+    vfmadd231pd  zmm6, zmm4, zmm5                  ; mult oct1 by oct2 after perms and add to accumulator
     ; e1 column
-    vmovapd     zmm2, zmmword ptr [rax]       ; load oct1 perm mask
-    vmovapd     zmm3, zmmword ptr [r9]        ; load oct2 perm mask
-    vpermpd     zmm4, zmm2, zmm0              ; perm oct1 by mask into zmm4
-    vpermpd     zmm5, zmm3, zmm1              ; perm oct2 by mask into zmm5
-    vmulpd      zmm4, zmm4, zmmword ptr [rcx] ; mult oct1 perm by mult mask
-    vfmadd231pd zmm6, zmm4, zmm5              ; mult oct1 by oct2 after perms and add to accumulator
-    add         rax, 64
-    add         r9, 64
-    add         rcx, 64
+    vmovapd      zmm2, zmmword ptr [rax+64]        ; load oct1 perm mask
+    vmovapd      zmm3, zmmword ptr [r9+64]         ; load oct2 perm mask
+    vpermpd      zmm4, zmm2, zmm0                  ; perm oct1 by mask into zmm4
+    vpermpd      zmm5, zmm3, zmm1                  ; perm oct2 by mask into zmm5
+    vmulpd       zmm4, zmm4, zmmword ptr [rcx+64]  ; mult oct1 perm by mult mask
+    vfmadd231pd  zmm6, zmm4, zmm5                  ; mult oct1 by oct2 after perms and add to accumulator
     ; e2 column
-    vmovapd     zmm2, zmmword ptr [rax]       ; load oct1 perm mask
-    vmovapd     zmm3, zmmword ptr [r9]        ; load oct2 perm mask
-    vpermpd     zmm4, zmm2, zmm0              ; perm oct1 by mask into zmm4
-    vpermpd     zmm5, zmm3, zmm1              ; perm oct2 by mask into zmm5
-    vmulpd      zmm4, zmm4, zmmword ptr [rcx] ; mult oct1 perm by mult mask
-    vfmadd231pd zmm6, zmm4, zmm5              ; mult oct1 by oct2 after perms and add to accumulator
-    add         rax, 64
-    add         r9, 64
-    add         rcx, 64
+    vmovapd      zmm2, zmmword ptr [rax+128]       ; load oct1 perm mask
+    vmovapd      zmm3, zmmword ptr [r9+128]        ; load oct2 perm mask
+    vpermpd      zmm4, zmm2, zmm0                  ; perm oct1 by mask into zmm4
+    vpermpd      zmm5, zmm3, zmm1                  ; perm oct2 by mask into zmm5
+    vmulpd       zmm4, zmm4, zmmword ptr [rcx+128] ; mult oct1 perm by mult mask
+    vfmadd231pd  zmm6, zmm4, zmm5                  ; mult oct1 by oct2 after perms and add to accumulator
     ; e3 column
-    vmovapd     zmm2, zmmword ptr [rax]       ; load oct1 perm mask
-    vmovapd     zmm3, zmmword ptr [r9]        ; load oct2 perm mask
-    vpermpd     zmm4, zmm2, zmm0              ; perm oct1 by mask into zmm4
-    vpermpd     zmm5, zmm3, zmm1              ; perm oct2 by mask into zmm5
-    vmulpd      zmm4, zmm4, zmmword ptr [rcx] ; mult oct1 perm by mult mask
-    vfmadd231pd zmm6, zmm4, zmm5              ; mult oct1 by oct2 after perms and add to accumulator
-    add         rax, 64
-    add         r9, 64
-    add         rcx, 64
+    vmovapd      zmm2, zmmword ptr [rax+192]       ; load oct1 perm mask
+    vmovapd      zmm3, zmmword ptr [r9+192]        ; load oct2 perm mask
+    vpermpd      zmm4, zmm2, zmm0                  ; perm oct1 by mask into zmm4
+    vpermpd      zmm5, zmm3, zmm1                  ; perm oct2 by mask into zmm5
+    vmulpd       zmm4, zmm4, zmmword ptr [rcx+192] ; mult oct1 perm by mult mask
+    vfmadd231pd  zmm6, zmm4, zmm5                  ; mult oct1 by oct2 after perms and add to accumulator
     ; e4 column
-    vmovapd     zmm2, zmmword ptr [rax]       ; load oct1 perm mask
-    vmovapd     zmm3, zmmword ptr [r9]        ; load oct2 perm mask
-    vpermpd     zmm4, zmm2, zmm0              ; perm oct1 by mask into zmm4
-    vpermpd     zmm5, zmm3, zmm1              ; perm oct2 by mask into zmm5
-    vmulpd      zmm4, zmm4, zmmword ptr [rcx] ; mult oct1 perm by mult mask
-    vfmadd231pd zmm6, zmm4, zmm5              ; mult oct1 by oct2 after perms and add to accumulator
-    add         rax, 64
-    add         r9, 64
-    add         rcx, 64
+    vmovapd      zmm2, zmmword ptr [rax+256]       ; load oct1 perm mask
+    vmovapd      zmm3, zmmword ptr [r9+256]        ; load oct2 perm mask
+    vpermpd      zmm4, zmm2, zmm0                  ; perm oct1 by mask into zmm4
+    vpermpd      zmm5, zmm3, zmm1                  ; perm oct2 by mask into zmm5
+    vmulpd       zmm4, zmm4, zmmword ptr [rcx+256] ; mult oct1 perm by mult mask
+    vfmadd231pd  zmm6, zmm4, zmm5                  ; mult oct1 by oct2 after perms and add to accumulator
     ; e5 column
-    vmovapd     zmm2, zmmword ptr [rax]       ; load oct1 perm mask
-    vmovapd     zmm3, zmmword ptr [r9]        ; load oct2 perm mask
-    vpermpd     zmm4, zmm2, zmm0              ; perm oct1 by mask into zmm4
-    vpermpd     zmm5, zmm3, zmm1              ; perm oct2 by mask into zmm5
-    vmulpd      zmm4, zmm4, zmmword ptr [rcx] ; mult oct1 perm by mult mask
-    vfmadd231pd zmm6, zmm4, zmm5              ; mult oct1 by oct2 after perms and add to accumulator
-    add         rax, 64
-    add         r9, 64
-    add         rcx, 64
+    vmovapd      zmm2, zmmword ptr [rax+320]       ; load oct1 perm mask
+    vmovapd      zmm3, zmmword ptr [r9+320]        ; load oct2 perm mask
+    vpermpd      zmm4, zmm2, zmm0                  ; perm oct1 by mask into zmm4
+    vpermpd      zmm5, zmm3, zmm1                  ; perm oct2 by mask into zmm5
+    vmulpd       zmm4, zmm4, zmmword ptr [rcx+320] ; mult oct1 perm by mult mask
+    vfmadd231pd  zmm6, zmm4, zmm5                  ; mult oct1 by oct2 after perms and add to accumulator
     ; e6 column
-    vmovapd     zmm2, zmmword ptr [rax]       ; load oct1 perm mask
-    vmovapd     zmm3, zmmword ptr [r9]        ; load oct2 perm mask
-    vpermpd     zmm4, zmm2, zmm0              ; perm oct1 by mask into zmm4
-    vpermpd     zmm5, zmm3, zmm1              ; perm oct2 by mask into zmm5
-    vmulpd      zmm4, zmm4, zmmword ptr [rcx] ; mult oct1 perm by mult mask
-    vfmadd231pd zmm6, zmm4, zmm5              ; mult oct1 by oct2 after perms and add to accumulator
-    add         rax, 64
-    add         r9, 64
-    add         rcx, 64
+    vmovapd      zmm2, zmmword ptr [rax+384]       ; load oct1 perm mask
+    vmovapd      zmm3, zmmword ptr [r9+384]        ; load oct2 perm mask
+    vpermpd      zmm4, zmm2, zmm0                  ; perm oct1 by mask into zmm4
+    vpermpd      zmm5, zmm3, zmm1                  ; perm oct2 by mask into zmm5
+    vmulpd       zmm4, zmm4, zmmword ptr [rcx+384] ; mult oct1 perm by mult mask
+    vfmadd231pd  zmm6, zmm4, zmm5                  ; mult oct1 by oct2 after perms and add to accumulator
     ; e7 column
-    vmovapd     zmm2, zmmword ptr [rax]       ; load oct1 perm mask
-    vmovapd     zmm3, zmmword ptr [r9]        ; load oct2 perm mask
-    vpermpd     zmm4, zmm2, zmm0              ; perm oct1 by mask into zmm4
-    vpermpd     zmm5, zmm3, zmm1              ; perm oct2 by mask into zmm5
-    vmulpd      zmm4, zmm4, zmmword ptr [rcx] ; mult oct1 perm by mult mask
-    vfmadd231pd zmm6, zmm4, zmm5              ; mult oct1 by oct2 after perms and add to accumulator
-    vmovapd     zmmword ptr [r8], zmm6        ; store results in caller's memory
-    vmovapd     xmm6, xmmword ptr [temp_xmm6]
+    vmovapd      zmm2, zmmword ptr [rax+448]       ; load oct1 perm mask
+    vmovapd      zmm3, zmmword ptr [r9+448]        ; load oct2 perm mask
+    vpermpd      zmm4, zmm2, zmm0                  ; perm oct1 by mask into zmm4
+    vpermpd      zmm5, zmm3, zmm1                  ; perm oct2 by mask into zmm5
+    vmulpd       zmm4, zmm4, zmmword ptr [rcx+448] ; mult oct1 perm by mult mask
+    vfmadd231pd  zmm6, zmm4, zmm5                  ; mult oct1 by oct2 after perms and add to accumulator
+    vmovapd      zmmword ptr [r8], zmm6            ; store results in caller's memory
+    vextractf128 xmm6, ymm10, 1                    ; restore non-volatile lower 128 bits of xmm6 from volatile upper 128 bits of ymm10
     ret
 octonion_mul64_AVX512 endp
 ; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -761,104 +864,83 @@ octonion_mul64_AVX512 endp
 ;
 public octonion_div64_AVX512
 octonion_div64_AVX512 proc
-    vmovapd       xmmword ptr [temp_xmm6], xmm6
-    vmovapd       xmmword ptr [temp_xmm7], xmm7
-    vmovupd       zmm1, zmmword ptr [rdx]       ;calculate o2 norm
+    vinsertf128   ymm10, ymm10, xmm6, 1             ; save non-volatile lower 128 bits of xmm6 into volatile upper 128 bits of ymm10
+    vinsertf128   ymm11, ymm11, xmm7, 1             ; save non-volatile lower 128 bits of xmm7 into volatile upper 128 bits of ymm11
+    vmovupd       zmm1, zmmword ptr [rdx]           ; calculate o2 norm
     vmulpd        zmm1, zmm1, zmm1
-    vextractf64x4 ymm0, zmm1,1
-    vaddpd        ymm2, ymm0,ymm1
-    vextractf64x2 xmm0, ymm2,1
-    vaddpd        xmm1, xmm0,xmm2
-    vpsrldq       xmm0, xmm1,8
-    vaddsd        xmm0, xmm0,xmm1
-    vpbroadcastq  zmm7, xmm0                    ; zmm7 = o2norm, o2norm, o2norm, o2norm, o2norm, o2norm, o2norm, o2norm
-    vxorpd        zmm6, zmm6, zmm6
+    vextractf64x4 ymm0, zmm1, 1
+    vaddpd        ymm2, ymm0, ymm1
+    vextractf64x2 xmm0, ymm2, 1
+    vaddpd        xmm1, xmm0, xmm2
+    vpsrldq       xmm0, xmm1, 8
+    vaddsd        xmm0, xmm0, xmm1
+    vpbroadcastq  zmm7, xmm0                        ; zmm7 = o2norm, o2norm, o2norm, o2norm, o2norm, o2norm, o2norm, o2norm
+    vxorpd        zmm6, zmm6, zmm6                  ; initialize the accumulator to zero
     ; e0 column
-    vmovapd       zmm0, zmmword ptr [rcx]       ; load oct1
-    vmovapd       zmm1, zmmword ptr [rdx]       ; load oct2
-    lea           rax, byte ptr [n0]            ; oct1 perm mask ptr
-    lea           r9, byte ptr [m0]             ; oct2 perm mask ptr
-    lea           rcx, byte ptr [t0]            ; div mask ptr
-    vmovapd       zmm2, zmmword ptr [rax]       ; load oct1 perm mask
-    vmovapd       zmm3, zmmword ptr [r9]        ; load oct2 perm mask
-    vpermpd       zmm4, zmm2, zmm0              ; perm oct1 by mask into zmm4
-    vpermpd       zmm5, zmm3, zmm1              ; perm oct2 by mask into zmm5
-    vmulpd        zmm4, zmm4, zmmword ptr [rcx] ; mult oct1 perm by mult mask
-    vfmadd231pd   zmm6, zmm4, zmm5              ; mult oct1 by oct2 after perms and add to accumulator
-    add           rax, 64
-    add           r9, 64
-    add           rcx, 64
+    vmovapd       zmm0, zmmword ptr [rcx]           ; load oct1
+    vmovapd       zmm1, zmmword ptr [rdx]           ; load oct2
+    lea           rax, byte ptr [n0]                ; oct1 perm mask ptr
+    lea           r9, byte ptr [m0]                 ; oct2 perm mask ptr
+    lea           rcx, byte ptr [t0]                ; div mask ptr
+    vmovapd       zmm2, zmmword ptr [rax]           ; load oct1 perm mask
+    vmovapd       zmm3, zmmword ptr [r9]            ; load oct2 perm mask
+    vpermpd       zmm4, zmm2, zmm0                  ; perm oct1 by mask into zmm4
+    vpermpd       zmm5, zmm3, zmm1                  ; perm oct2 by mask into zmm5
+    vmulpd        zmm4, zmm4, zmmword ptr [rcx]     ; mult oct1 perm by mult mask
+    vfmadd231pd   zmm6, zmm4, zmm5                  ; mult oct1 by oct2 after perms and add to accumulator
     ; e1 column
-    vmovapd       zmm2, zmmword ptr [rax]       ; load oct1 perm mask
-    vmovapd       zmm3, zmmword ptr [r9]        ; load oct2 perm mask
-    vpermpd       zmm4, zmm2, zmm0              ; perm oct1 by mask into zmm4
-    vpermpd       zmm5, zmm3, zmm1              ; perm oct2 by mask into zmm5
-    vmulpd        zmm4, zmm4, zmmword ptr [rcx] ; mult oct1 perm by mult mask
-    vfmadd231pd   zmm6, zmm4, zmm5              ; mult oct1 by oct2 after perms and add to accumulator
-    add           rax, 64
-    add           r9, 64
-    add           rcx, 64
+    vmovapd       zmm2, zmmword ptr [rax+64]        ; load oct1 perm mask
+    vmovapd       zmm3, zmmword ptr [r9+64]         ; load oct2 perm mask
+    vpermpd       zmm4, zmm2, zmm0                  ; perm oct1 by mask into zmm4
+    vpermpd       zmm5, zmm3, zmm1                  ; perm oct2 by mask into zmm5
+    vmulpd        zmm4, zmm4, zmmword ptr [rcx+64]  ; mult oct1 perm by mult mask
+    vfmadd231pd   zmm6, zmm4, zmm5                  ; mult oct1 by oct2 after perms and add to accumulator
     ; e2 column
-    vmovapd       zmm2, zmmword ptr [rax]       ; load oct1 perm mask
-    vmovapd       zmm3, zmmword ptr [r9]        ; load oct2 perm mask
-    vpermpd       zmm4, zmm2, zmm0              ; perm oct1 by mask into zmm4
-    vpermpd       zmm5, zmm3, zmm1              ; perm oct2 by mask into zmm5
-    vmulpd        zmm4, zmm4, zmmword ptr [rcx] ; mult oct1 perm by mult mask
-    vfmadd231pd   zmm6, zmm4, zmm5              ; mult oct1 by oct2 after perms and add to accumulator
-    add           rax, 64
-    add           r9, 64
-    add           rcx, 64
+    vmovapd       zmm2, zmmword ptr [rax+128]       ; load oct1 perm mask
+    vmovapd       zmm3, zmmword ptr [r9+128]        ; load oct2 perm mask
+    vpermpd       zmm4, zmm2, zmm0                  ; perm oct1 by mask into zmm4
+    vpermpd       zmm5, zmm3, zmm1                  ; perm oct2 by mask into zmm5
+    vmulpd        zmm4, zmm4, zmmword ptr [rcx+128] ; mult oct1 perm by mult mask
+    vfmadd231pd   zmm6, zmm4, zmm5                  ; mult oct1 by oct2 after perms and add to accumulator
     ; e3 column
-    vmovapd       zmm2, zmmword ptr [rax]       ; load oct1 perm mask
-    vmovapd       zmm3, zmmword ptr [r9]        ; load oct2 perm mask
-    vpermpd       zmm4, zmm2, zmm0              ; perm oct1 by mask into zmm4
-    vpermpd       zmm5, zmm3, zmm1              ; perm oct2 by mask into zmm5
-    vmulpd        zmm4, zmm4, zmmword ptr [rcx] ; mult oct1 perm by mult mask
-    vfmadd231pd   zmm6, zmm4, zmm5              ; mult oct1 by oct2 after perms and add to accumulator
-    add           rax, 64
-    add           r9, 64
-    add           rcx, 64
+    vmovapd       zmm2, zmmword ptr [rax+192]       ; load oct1 perm mask
+    vmovapd       zmm3, zmmword ptr [r9+192]        ; load oct2 perm mask
+    vpermpd       zmm4, zmm2, zmm0                  ; perm oct1 by mask into zmm4
+    vpermpd       zmm5, zmm3, zmm1                  ; perm oct2 by mask into zmm5
+    vmulpd        zmm4, zmm4, zmmword ptr [rcx+192] ; mult oct1 perm by mult mask
+    vfmadd231pd   zmm6, zmm4, zmm5                  ; mult oct1 by oct2 after perms and add to accumulator
     ; e4 column
-    vmovapd       zmm2, zmmword ptr [rax]       ; load oct1 perm mask
-    vmovapd       zmm3, zmmword ptr [r9]        ; load oct2 perm mask
-    vpermpd       zmm4, zmm2, zmm0              ; perm oct1 by mask into zmm4
-    vpermpd       zmm5, zmm3, zmm1              ; perm oct2 by mask into zmm5
-    vmulpd        zmm4, zmm4, zmmword ptr [rcx] ; mult oct1 perm by mult mask
-    vfmadd231pd   zmm6, zmm4, zmm5              ; mult oct1 by oct2 after perms and add to accumulator
-    add           rax, 64
-    add           r9, 64
-    add           rcx, 64
+    vmovapd       zmm2, zmmword ptr [rax+256]       ; load oct1 perm mask
+    vmovapd       zmm3, zmmword ptr [r9+256]        ; load oct2 perm mask
+    vpermpd       zmm4, zmm2, zmm0                  ; perm oct1 by mask into zmm4
+    vpermpd       zmm5, zmm3, zmm1                  ; perm oct2 by mask into zmm5
+    vmulpd        zmm4, zmm4, zmmword ptr [rcx+256] ; mult oct1 perm by mult mask
+    vfmadd231pd   zmm6, zmm4, zmm5                  ; mult oct1 by oct2 after perms and add to accumulator
     ; e5 column
-    vmovapd       zmm2, zmmword ptr [rax]       ; load oct1 perm mask
-    vmovapd       zmm3, zmmword ptr [r9]        ; load oct2 perm mask
-    vpermpd       zmm4, zmm2, zmm0              ; perm oct1 by mask into zmm4
-    vpermpd       zmm5, zmm3, zmm1              ; perm oct2 by mask into zmm5
-    vmulpd        zmm4, zmm4, zmmword ptr [rcx] ; mult oct1 perm by mult mask
-    vfmadd231pd   zmm6, zmm4, zmm5              ; mult oct1 by oct2 after perms and add to accumulator
-    add           rax, 64
-    add           r9, 64
-    add           rcx, 64
+    vmovapd       zmm2, zmmword ptr [rax+320]       ; load oct1 perm mask
+    vmovapd       zmm3, zmmword ptr [r9+320]        ; load oct2 perm mask
+    vpermpd       zmm4, zmm2, zmm0                  ; perm oct1 by mask into zmm4
+    vpermpd       zmm5, zmm3, zmm1                  ; perm oct2 by mask into zmm5
+    vmulpd        zmm4, zmm4, zmmword ptr [rcx+320] ; mult oct1 perm by mult mask
+    vfmadd231pd   zmm6, zmm4, zmm5                  ; mult oct1 by oct2 after perms and add to accumulator
     ; e6 column
-    vmovapd       zmm2, zmmword ptr [rax]       ; load oct1 perm mask
-    vmovapd       zmm3, zmmword ptr [r9]        ; load oct2 perm mask
-    vpermpd       zmm4, zmm2, zmm0              ; perm oct1 by mask into zmm4
-    vpermpd       zmm5, zmm3, zmm1              ; perm oct2 by mask into zmm5
-    vmulpd        zmm4, zmm4, zmmword ptr [rcx] ; mult oct1 perm by mult mask
-    vfmadd231pd   zmm6, zmm4, zmm5              ; mult oct1 by oct2 after perms and add to accumulator
-    add           rax, 64
-    add           r9, 64
-    add           rcx, 64
+    vmovapd       zmm2, zmmword ptr [rax+384]       ; load oct1 perm mask
+    vmovapd       zmm3, zmmword ptr [r9+384]        ; load oct2 perm mask
+    vpermpd       zmm4, zmm2, zmm0                  ; perm oct1 by mask into zmm4
+    vpermpd       zmm5, zmm3, zmm1                  ; perm oct2 by mask into zmm5
+    vmulpd        zmm4, zmm4, zmmword ptr [rcx+384] ; mult oct1 perm by mult mask
+    vfmadd231pd   zmm6, zmm4, zmm5                  ; mult oct1 by oct2 after perms and add to accumulator
     ; e7 column
-    vmovapd       zmm2, zmmword ptr [rax]       ; load oct1 perm mask
-    vmovapd       zmm3, zmmword ptr [r9]        ; load oct2 perm mask
-    vpermpd       zmm4, zmm2, zmm0              ; perm oct1 by mask into zmm4
-    vpermpd       zmm5, zmm3, zmm1              ; perm oct2 by mask into zmm5
-    vmulpd        zmm4, zmm4, zmmword ptr [rcx] ; mult oct1 perm by mult mask
-    vfmadd231pd   zmm6, zmm4, zmm5              ; mult oct1 by oct2 after perms and add to accumulator
-    vdivpd        zmm6, zmm6, zmm7              ; divide by o2norm
-    vmovapd       zmmword ptr [r8], zmm6        ; store results in caller's memory
-    vmovapd       xmm6, xmmword ptr [temp_xmm6]
-    vmovapd       xmm7, xmmword ptr [temp_xmm7]
+    vmovapd       zmm2, zmmword ptr [rax+448]       ; load oct1 perm mask
+    vmovapd       zmm3, zmmword ptr [r9+448]        ; load oct2 perm mask
+    vpermpd       zmm4, zmm2, zmm0                  ; perm oct1 by mask into zmm4
+    vpermpd       zmm5, zmm3, zmm1                  ; perm oct2 by mask into zmm5
+    vmulpd        zmm4, zmm4, zmmword ptr [rcx+448] ; mult oct1 perm by mult mask
+    vfmadd231pd   zmm6, zmm4, zmm5                  ; mult oct1 by oct2 after perms and add to accumulator
+    vdivpd        zmm6, zmm6, zmm7                  ; divide by o2norm
+    vmovapd       zmmword ptr [r8], zmm6            ; store results in caller's memory
+    vextractf128  xmm6, ymm10, 1                    ; restore non-volatile lower 128 bits of xmm6 from volatile upper 128 bits of ymm10
+    vextractf128  xmm7, ymm11, 1                    ; restore non-volatile lower 128 bits of xmm7 from volatile upper 128 bits of ymm11
     ret
 octonion_div64_AVX512 endp
 ; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -866,12 +948,20 @@ octonion_div64_AVX512 endp
 
 
 ; =================================================================================================================
-; octonion double precision normal AVX-512
+; octonion double precision scalar multiplication AVX-512
 ; =================================================================================================================
 ; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ;
 ; The math:
-;   result = e0*e0 + e1*e1 + e2*e2 + e3*e3 + e4*e4 + e5*e5 + e6*e6 + e7*e7
+;
+; o1e0*s -> e0
+; o1e1*s -> e1
+; o1e2*s -> e2
+; o1e3*s -> e3
+; o1e4*s -> e4
+; o1e5*s -> e5
+; o1e6*s -> e6
+; o1e7*s -> e7
 ;
 ; -----------------------------------------------------------------------------------------------------------------
 ;
@@ -881,23 +971,58 @@ octonion_div64_AVX512 endp
 ;
 ; C prototype:
 ;
-; void octonion_norm64_AVX512(octonion64 *o, double *result);
+; void octonion_mul64s_AVX512(octonion64 *o1, double *s, octonion64 *result);
 ;
 ; -----------------------------------------------------------------------------------------------------------------
 ;
-public octonion_norm64_AVX512
-octonion_norm64_AVX512 proc
-    vmovupd       zmm1,zmmword ptr [rcx]
-    vmulpd        zmm1, zmm1, zmm1
-    vextractf64x4 ymm0,zmm1,1
-    vaddpd        ymm2,ymm0,ymm1
-    vextractf64x2 xmm0,ymm2,1
-    vaddpd        xmm1,xmm0,xmm2
-    vpsrldq       xmm0,xmm1,8
-    vaddsd        xmm0,xmm0,xmm1
-    vmovq         qword ptr [rdx], xmm0
+public octonion_mul64s_AVX512
+octonion_mul64s_AVX512 proc
+    vmovapd      zmm0, zmmword ptr [rcx]
+    vbroadcastsd zmm1, qword ptr [rdx]
+    vmulpd       zmm0, zmm0, zmm1
+    vmovapd      zmmword ptr [r8], zmm0
     ret
-octonion_norm64_AVX512 endp
+octonion_mul64s_AVX512 endp
+; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+; =================================================================================================================
+
+
+; =================================================================================================================
+; octonion double precision scalar division AVX-512
+; =================================================================================================================
+; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+;
+; The math:
+;
+; o1e0/s -> e0
+; o1e1/s -> e1
+; o1e2/s -> e2
+; o1e3/s -> e3
+; o1e4/s -> e4
+; o1e5/s -> e5
+; o1e6/s -> e6
+; o1e7/s -> e7
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+; notes:
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+; C prototype:
+;
+; void octonion_div64s_AVX512(octonion64 *o1, double *s, octonion64 *result);
+;
+; -----------------------------------------------------------------------------------------------------------------
+;
+public octonion_div64s_AVX512
+octonion_div64s_AVX512 proc
+    vmovapd      zmm0, zmmword ptr [rcx]
+    vbroadcastsd zmm1, qword ptr [rdx]
+    vdivpd       zmm0, zmm0, zmm1
+    vmovapd      zmmword ptr [r8], zmm0
+    ret
+octonion_div64s_AVX512 endp
 ; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 ; =================================================================================================================
 
@@ -983,6 +1108,11 @@ octonion_sub64_AVX512 endp
 ; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 ; =================================================================================================================
 
+
+; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+; AVX-512
+; =================================================================================================================
+; =================================================================================================================
 
 ; =================================================================================================================
 ; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<

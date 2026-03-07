@@ -80,17 +80,21 @@ namespace mq17j
             oscalars64 vals;
         } octonion64;
 
+        void octonion_norm64_AVX2(octonion64 *o1, double *result);
         void octonion_mul64_AVX2(octonion64 *o1, octonion64 *o2, octonion64 *result);
         void octonion_div64_AVX2(octonion64 *o1, octonion64 *o2, octonion64 *result);
+        void octonion_mul64s_AVX2(octonion64 *o1, double *s, octonion64 *result);
+        void octonion_div64s_AVX2(octonion64 *o1, double *s, octonion64 *result);
         void octonion_add64_AVX2(octonion64 *o1, octonion64 *o2, octonion64 *result);
         void octonion_sub64_AVX2(octonion64 *o1, octonion64 *o2, octonion64 *result);
-        void octonion_norm64_AVX2(octonion64 *o1, double *result);
 
+        void octonion_norm64_AVX512(octonion64 *o1, double *result);
         void octonion_mul64_AVX512(octonion64 *o1, octonion64 *o2, octonion64 *result);
         void octonion_div64_AVX512(octonion64 *o1, octonion64 *o2, octonion64 *result);
+        void octonion_mul64s_AVX512(octonion64 *o1, double *s, octonion64 *result);
+        void octonion_div64s_AVX512(octonion64 *o1, double *s, octonion64 *result);
         void octonion_add64_AVX512(octonion64 *o1, octonion64 *o2, octonion64 *result);
         void octonion_sub64_AVX512(octonion64 *o1, octonion64 *o2, octonion64 *result);
-        void octonion_norm64_AVX512(octonion64 *o1, double *result);
 
 #ifdef __cplusplus
     }

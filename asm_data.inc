@@ -84,9 +84,3 @@ extern m4 :qword
 extern m5 :qword 
 extern m6 :qword 
 extern m7 :qword 
-
-extern temp_xmm6  :qword 
-extern temp_xmm7  :qword 
-extern temp_xmm8  :qword 
-extern temp_xmm9  :qword
-extern temp_xmm10 :qword

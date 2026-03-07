@@ -17,13 +17,13 @@ namespace mq17j
             qscalars64 vals;
         } quaternion64;
 
-        void quaternion_add64_AVX2(const quaternion64 *q1, const quaternion64 *q2, quaternion64 *result);
-        void quaternion_sub64_AVX2(const quaternion64 *q1, const quaternion64 *q2, quaternion64 *result);
-        void quaternion_mul64s_AVX2(const quaternion64 *q, const double *d, quaternion64 *result); //scalar multiply
+        void quaternion_norm64_AVX2(const quaternion64 *q, double *result);
         void quaternion_mul64_AVX2(const quaternion64 *o1, const quaternion64 *o2, quaternion64 *result);
         void quaternion_div64_AVX2(const quaternion64 *q1, const quaternion64 *q2, quaternion64 *result);
+        void quaternion_mul64s_AVX2(const quaternion64 *q, const double *d, quaternion64 *result); //scalar multiply
         void quaternion_div64s_AVX2(const quaternion64 *q, const double *d, quaternion64 *result); //scalar division
-        void quaternion_norm64_AVX2(const quaternion64 *q, double *result);
+        void quaternion_add64_AVX2(const quaternion64 *q1, const quaternion64 *q2, quaternion64 *result);
+        void quaternion_sub64_AVX2(const quaternion64 *q1, const quaternion64 *q2, quaternion64 *result);
 
 #ifdef __cplusplus
     }
