@@ -27,7 +27,7 @@
 ;   quaternion_asm.asm
 ;
 ; description
-;   octonion math with both AVX2 and AVX-512 versions
+;   quaternion math using AVX2
 ;
 ; platform
 ;   Windows x64
@@ -46,7 +46,7 @@
 ;   microsoft x64 ABI currently and does not use the shadow space. linux is on the radar.
 ;
 ; change log
-;   2026-03-01: created initial double versions of octonion primitives (mul, div, add, sub, norm)
+;   2026-03-01: created initial double versions of quaternion primitives (mul, div, add, sub, norm)
 ;
 ; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 ; =================================================================================================================
@@ -144,13 +144,13 @@ include asm_data.inc
 ;
 public quaternion_norm64_AVX2
 quaternion_norm64_AVX2 proc
-    vmovapd      ymm0, ymmword ptr [rcx]                   ; ymm0 = o1e0, o1e1, o1e2, o1e3
-    vmulpd       ymm0, ymm0, ymm0                          ; ymm0 = o1e0*o1e0, o1e1*o1e1, o1e2*o1e2, o1e3*o1e3
-    vextractf128 xmm3, ymm0, 1                             ; xmm3 = o1e2*o1e2, o1e3*o1e3
-    vaddpd       xmm3, xmm3, xmm0                          ; xmm3 = o1e2*o1e2+o1e0*o1e0, o1e3*o1e3+o1e1*o1e1
-    vmovapd      xmm4, xmm3                                ; xmm4 = o1e2*o1e2+o1e0*o1e0, o1e3*o1e3+o1e1*o1e1
-    vshufpd      xmm4, xmm4, xmm3, 1                       ; xmm4 = o1e3*o1e3+o1e1*o1e1, o1e2*o1e2+o1e0*o1e0
-    vaddpd       xmm0, xmm4, xmm3                          ; xmm0 = o1e3*o1e3+o1e1*o1e1+o1e2*o1e2+o1e0*o1e0, o1e2*o1e2+o1e0*o1e0+o1e3*o1e3+o1e1*o1e1
+    vmovapd      ymm0, ymmword ptr [rcx]                   ; ymm0 = q1e0, q1e1, q1e2, q1e3
+    vmulpd       ymm0, ymm0, ymm0                          ; ymm0 = q1e0*q1e0, q1e1*q1e1, q1e2*q1e2, q1e3*q1e3
+    vextractf128 xmm3, ymm0, 1                             ; xmm3 = q1e2*q1e2, q1e3*q1e3
+    vaddpd       xmm3, xmm3, xmm0                          ; xmm3 = q1e2*q1e2+q1e0*q1e0, q1e3*o1e3+q1e1*q1e1
+    vmovapd      xmm4, xmm3                                ; xmm4 = q1e2*q1e2+q1e0*q1e0, q1e3*o1e3+q1e1*q1e1
+    vshufpd      xmm4, xmm4, xmm3, 1                       ; xmm4 = q1e3*q1e3+q1e1*q1e1, q1e2*o1e2+q1e0*q1e0
+    vaddpd       xmm0, xmm4, xmm3                          ; xmm0 = q1e3*q1e3+q1e1*q1e1+q1e2*q1e2+q1e0*q1e0, q1e2*q1e2+q1e0*q1e0+q1e3*q1e3+q1e1*q1e1
     movsd        qword ptr [rdx], xmm0
     ret
 quaternion_norm64_AVX2 endp
@@ -178,7 +178,7 @@ quaternion_norm64_AVX2 endp
 ;
 ; C prototype:
 ;
-; void quaternion_mul64_AVX2(quaternion64 *o1, quaternion64 *o2, quaternion64 *result);
+; void quaternion_mul64_AVX2(quaternion64 *q1, quaternion64 *q2, quaternion64 *result);
 ;
 ; -----------------------------------------------------------------------------------------------------------------
 ;
@@ -234,7 +234,7 @@ quaternion_mul64_AVX2 endp
 ;
 ; C prototype:
 ;
-; void quaternion_div64_AVX2(quaternion64 *o1, quaternion64 *o2, quaternion64 *result);
+; void quaternion_div64_AVX2(quaternion64 *q1, quaternion64 *q2, quaternion64 *result);
 ;
 ; -----------------------------------------------------------------------------------------------------------------
 ;
