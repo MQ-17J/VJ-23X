@@ -84,3 +84,6 @@ extern m4 :qword
 extern m5 :qword 
 extern m6 :qword 
 extern m7 :qword 
+
+extern i0 :qword
+extern i1 :qword

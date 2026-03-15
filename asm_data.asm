@@ -90,6 +90,9 @@ public m5
 public m6
 public m7
 
+public i0
+public i1
+
 ; -----------------------------------------------------------------------------------------------------------------
 ; =================================================================================================================
 
@@ -101,7 +104,7 @@ public m7
 ;
 tables segment align(64) readonly
 
-; h0 is used to eliminate the need for dealing with the plus and minus signs in the math algo
+; h0 is used to eliminate the need for dealing with the plus and minus signs in the multiply algo
 ; multiply by the appropriate line eliminating subtraction and just use vfmadd231pd
 
 h0 real8 +1.0, +1.0, +1.0, +1.0, +1.0, +1.0, +1.0, +1.0
@@ -113,7 +116,7 @@ h5 real8 -1.0, -1.0, +1.0, -1.0, +1.0, +1.0, +1.0, -1.0
 h6 real8 -1.0, -1.0, -1.0, +1.0, +1.0, -1.0, +1.0, +1.0
 h7 real8 -1.0, +1.0, -1.0, -1.0, +1.0, +1.0, -1.0, +1.0
 
-; t0 is used to eliminate the need for dealing with the plus and minus signs in the math algo
+; t0 is used to eliminate the need for dealing with the plus and minus signs in the division algo
 ; multiply by the appropriate line eliminating subtraction and just use vfmadd231pd
 
 t0 real8 +1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0
@@ -144,6 +147,10 @@ m4 dq 4, 5, 6, 7, 0, 1, 2, 3
 m5 dq 5, 4, 7, 6, 1, 0, 3, 2
 m6 dq 6, 7, 4, 5, 2, 3, 0, 1
 m7 dq 7, 6, 5, 4, 3, 2, 1, 0
+
+; complex multiplication
+i0 real8 -1.0, +1.0
+i1 real8 +1.0, -1.0
 
 tables ends
 
