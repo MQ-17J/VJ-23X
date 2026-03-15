@@ -11,7 +11,7 @@ namespace mq17j
             double e0, e1;
         } cscalars64;
 
-        //could do align(32), but keep 64 in case AVX-512 used in edge cases of stacked quaternions
+        //could do align(32)
         __declspec(align(64)) typedef union _complex64 {
             __m128d avx128;
             cscalars64 vals;
