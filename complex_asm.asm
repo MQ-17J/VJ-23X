@@ -180,7 +180,7 @@ complex_norm64_AVX2 proc
     vmulpd       xmm0, xmm0, xmm0                          ; ymm0 = c1e0*c1e0, c1e1*c1e1
     vshufpd      xmm1, xmm0, xmm0, 1                       ; xmm1 = c1e1*c1e1, c1e0*c1e0
     vaddpd       xmm0, xmm1, xmm0                          ; xmm0 = c1e0*c1e0+c1e1*c1e1, c1e1*c1e1+c1e0*c1e0
-    vmovq        qword ptr [rdx], xmm0                     ; result = xmm0
+    vmovsd       qword ptr [rdx], xmm0                     ; result = xmm0
     ret
 complex_norm64_AVX2 endp
 ; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<

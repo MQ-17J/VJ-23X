@@ -148,8 +148,7 @@ quaternion_norm64_AVX2 proc
     vmulpd       ymm0, ymm0, ymm0                          ; ymm0 = q1e0*q1e0, q1e1*q1e1, q1e2*q1e2, q1e3*q1e3
     vextractf128 xmm3, ymm0, 1                             ; xmm3 = q1e2*q1e2, q1e3*q1e3
     vaddpd       xmm3, xmm3, xmm0                          ; xmm3 = q1e2*q1e2+q1e0*q1e0, q1e3*o1e3+q1e1*q1e1
-    vmovapd      xmm4, xmm3                                ; xmm4 = q1e2*q1e2+q1e0*q1e0, q1e3*o1e3+q1e1*q1e1
-    vshufpd      xmm4, xmm4, xmm3, 1                       ; xmm4 = q1e3*q1e3+q1e1*q1e1, q1e2*o1e2+q1e0*q1e0
+    vshufpd      xmm4, xmm3, xmm3, 1                       ; xmm4 = q1e3*q1e3+q1e1*q1e1, q1e2*o1e2+q1e0*q1e0
     vaddpd       xmm0, xmm4, xmm3                          ; xmm0 = q1e3*q1e3+q1e1*q1e1+q1e2*q1e2+q1e0*q1e0, q1e2*q1e2+q1e0*q1e0+q1e3*q1e3+q1e1*q1e1
     movsd        qword ptr [rdx], xmm0
     ret

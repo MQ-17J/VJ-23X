@@ -201,6 +201,7 @@ include asm_data.inc
 ; -----------------------------------------------------------------------------------------------------------------
 ;
 ; notes:
+;   2026-03-15 increased efficiency here after implementing a better algo for sedenions
 ;
 ; -----------------------------------------------------------------------------------------------------------------
 ;
@@ -215,18 +216,12 @@ octonion_norm64_AVX2 proc
     vmovapd      ymm0, ymmword ptr [rcx]                   ; ymm0 = o1e0, o1e1, o1e2, o1e3
     vmovapd      ymm1, ymmword ptr [rcx+32]                ; ymm1 = o1e4, o1e5, o1e6, o1e7
     vmulpd       ymm0, ymm0, ymm0                          ; ymm0 = o1e0*o1e0, o1e1*o1e1, o1e2*o1e2, o1e3*o1e3
-    vmulpd       ymm1, ymm1, ymm1                          ; ymm1 = o1e4*o1e4, o1e5*o1e5, o1e6*o1e6, o1e7*o1e7
-    vextractf128 xmm3, ymm0, 1                             ; xmm3 = o1e2*o1e2, o1e3*o1e3
-    vaddpd       xmm3, xmm3, xmm0                          ; xmm3 = o1e2*o1e2+o1e0*o1e0, o1e3*o1e3+o1e1*o1e1
-    vmovapd      xmm4, xmm3                                ; xmm4 = o1e2*o1e2+o1e0*o1e0, o1e3*o1e3+o1e1*o1e1
-    vshufpd      xmm4, xmm4, xmm3, 1                       ; xmm4 = o1e3*o1e3+o1e1*o1e1, o1e2*o1e2+o1e0*o1e0
-    vaddpd       xmm0, xmm4, xmm3                          ; xmm0 = o1e3*o1e3+o1e1*o1e1+o1e2*o1e2+o1e0*o1e0, o1e2*o1e2+o1e0*o1e0+o1e3*o1e3+o1e1*o1e1
-    vextractf128 xmm3, ymm1, 1                             ; xmm3 = o1e6*o1e6, o1e7*o1e7
-    vaddpd       xmm3, xmm3, xmm1                          ; xmm3 = o1e6*o1e6+o1e4*o1e4, o1e7*o1e7+o1e5*o1e5
-    vshufpd      xmm4, xmm3, xmm3,1                        ; xmm4 = o1e7*o1e7+o1e5*o1e5, o1e6*o1e6+o1e4*o1e4
-    vaddpd       xmm4, xmm4, xmm3                          ; xmm4 = o1e7*o1e7+o1e5*o1e5+o1e6*o1e6+o1e4*o1e4, o1e6*o1e6+o1e4*o1e4+o1e7*o1e7+o1e5*o1e5
-    vaddpd       xmm0, xmm0, xmm4                          ; xmm0 = o1e3*o1e3+o1e1*o1e1+o1e2*o1e2+o1e0*o1e0+o1e7*o1e7+o1e5*o1e5+o1e6*o1e6+o1e4*o1e4, o1e2*o1e2+o1e0*o1e0+o1e3*o1e3+o1e1*o1e1+o1e6*o1e6+o1e4*o1e4+o1e7*o1e7+o1e5*o1e5
-    vmovq        qword ptr [rdx], xmm0                     ; result = xmm0
+    vfmadd231pd  ymm0, ymm1, ymm1                          ; ymm0 = o1e0*o1e0+o1e4*o1e4, o1e1*o1e1+o1e5*o1e5, o1e2*o1e2+o1e6*o1e6, o1e3*o1e3+o1e7*o1e7
+    vextractf128 xmm1, ymm0, 1                             ; ymm1 = o1e2*o1e2+o1e6*o1e6, o1e3*o1e3+o1e7*o1e7
+    vaddpd       xmm0, xmm0, xmm1                          ; xmm0 = o1e0*o1e0+o1e4*o1e4+o1e2*o1e2+o1e6*o1e6, o1e1*o1e1+o1e5*o1e5+o1e3*o1e3+o1e7*o1e7
+    vshufpd      xmm1, xmm0, xmm0, 1                       ; xmm1 = o1e1*o1e1+o1e5*o1e5+o1e3*o1e3+o1e7*o1e7, o1e0*o1e0+o1e4*o1e4+o1e2*o1e2+o1e6*o1e6
+    vaddpd       xmm0, xmm0, xmm1                          ; xmm0 = o1e0*o1e0+o1e4*o1e4+o1e2*o1e2+o1e6*o1e6+o1e1*o1e1+o1e5*o1e5+o1e3*o1e3+o1e7*o1e7, o1e1*o1e1+o1e5*o1e5+o1e3*o1e3+o1e7*o1e7+o1e0*o1e0+o1e4*o1e4+o1e2*o1e2+o1e6*o1e6
+    vmovsd       qword ptr [rdx], xmm0                     ; result = xmm0
     ret
 octonion_norm64_AVX2 endp
 ; <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -402,17 +397,11 @@ octonion_div64_AVX2 proc
     vmovapd      ymm5, ymm0                                ; save for later
     vmovapd      ymm6, ymm1                                ; ditto
     vmulpd       ymm0, ymm0, ymm0                          ; ymm0 = o1e0*o1e0, o1e1*o1e1, o1e2*o1e2, o1e3*o1e3
-    vmulpd       ymm1, ymm1, ymm1                          ; ymm1 = o1e4*o1e4, o1e5*o1e5, o1e6*o1e6, o1e7*o1e7
-    vextractf128 xmm3, ymm0, 1                             ; xmm3 = o1e2*o1e2, o1e3*o1e3
-    vaddpd       xmm3, xmm3, xmm0                          ; xmm3 = o1e2*o1e2+o1e0*o1e0, o1e3*o1e3+o1e1*o1e1
-    vmovapd      xmm4, xmm3                                ; xmm4 = o1e2*o1e2+o1e0*o1e0, o1e3*o1e3+o1e1*o1e1
-    vshufpd      xmm4, xmm4, xmm3, 1                       ; xmm4 = o1e3*o1e3+o1e1*o1e1, o1e2*o1e2+o1e0*o1e0
-    vaddpd       xmm0, xmm4, xmm3                          ; xmm0 = o1e3*o1e3+o1e1*o1e1+o1e2*o1e2+o1e0*o1e0, o1e2*o1e2+o1e0*o1e0+o1e3*o1e3+o1e1*o1e1
-    vextractf128 xmm3, ymm1, 1                             ; xmm3 = o1e6*o1e6, o1e7*o1e7
-    vaddpd       xmm3, xmm3, xmm1                          ; xmm3 = o1e6*o1e6+o1e4*o1e4, o1e7*o1e7+o1e5*o1e5
-    vshufpd      xmm4, xmm3, xmm3,1                        ; xmm4 = o1e7*o1e7+o1e5*o1e5, o1e6*o1e6+o1e4*o1e4
-    vaddpd       xmm4, xmm4, xmm3                          ; xmm4 = o1e7*o1e7+o1e5*o1e5+o1e6*o1e6+o1e4*o1e4, o1e6*o1e6+o1e4*o1e4+o1e7*o1e7+o1e5*o1e5
-    vaddpd       xmm0, xmm0, xmm4                          ; xmm0 = o1e3*o1e3+o1e1*o1e1+o1e2*o1e2+o1e0*o1e0+o1e7*o1e7+o1e5*o1e5+o1e6*o1e6+o1e4*o1e4, o1e2*o1e2+o1e0*o1e0+o1e3*o1e3+o1e1*o1e1+o1e6*o1e6+o1e4*o1e4+o1e7*o1e7+o1e5*o1e5
+    vfmadd231pd  ymm0, ymm1, ymm1                          ; ymm0 = o1e0*o1e0+o1e4*o1e4, o1e1*o1e1+o1e5*o1e5, o1e2*o1e2+o1e6*o1e6, o1e3*o1e3+o1e7*o1e7
+    vextractf128 xmm1, ymm0, 1                             ; ymm1 = o1e2*o1e2+o1e6*o1e6, o1e3*o1e3+o1e7*o1e7
+    vaddpd       xmm0, xmm0, xmm1                          ; xmm0 = o1e0*o1e0+o1e4*o1e4+o1e2*o1e2+o1e6*o1e6, o1e1*o1e1+o1e5*o1e5+o1e3*o1e3+o1e7*o1e7
+    vshufpd      xmm1, xmm0, xmm0, 1                       ; xmm1 = o1e1*o1e1+o1e5*o1e5+o1e3*o1e3+o1e7*o1e7, o1e0*o1e0+o1e4*o1e4+o1e2*o1e2+o1e6*o1e6
+    vaddpd       xmm0, xmm0, xmm1                          ; xmm0 = o1e0*o1e0+o1e4*o1e4+o1e2*o1e2+o1e6*o1e6+o1e1*o1e1+o1e5*o1e5+o1e3*o1e3+o1e7*o1e7, o1e1*o1e1+o1e5*o1e5+o1e3*o1e3+o1e7*o1e7+o1e0*o1e0+o1e4*o1e4+o1e2*o1e2+o1e6*o1e6
     vpermpd      ymm10, ymm0, 00000000b                    ; ymm10 = o2norm, o2norm, o2norm, o2norm
     lea          rax, [t0]                                 ; rax = addr div mask
     vmovapd      ymm0, ymmword ptr [rcx]                   ; ymm0 = o1e0, o1e1, o1e2, o1e3
